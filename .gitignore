@@ -7,7 +7,10 @@ dist/
 .venv/
 venv/
 env/
+.pytest_cache/
 .idea/
 .vscode/
 .env
 .DS_Store
+CLAUDE.md
+docs/
