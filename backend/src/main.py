@@ -5,15 +5,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from config import CORS_ORIGINS, settings
+from config import Settings, settings
 from core.exceptions import AppException
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
 
-
-@app.exception_handler(AppException)
 async def domain_exception_handler(
     _request: Request, exc: AppException
 ) -> JSONResponse:
@@ -27,7 +24,6 @@ async def domain_exception_handler(
     )
 
 
-@app.exception_handler(Exception)
 async def unhandled_exception_handler(
     _request: Request, exc: Exception
 ) -> JSONResponse:
@@ -42,13 +38,26 @@ async def unhandled_exception_handler(
     )
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
-)
+def create_app(app_settings: Settings | None = None) -> FastAPI:
+    app_settings = app_settings or settings
+
+    app = FastAPI()
+
+    app.add_exception_handler(AppException, domain_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=app_settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
+
+    return app
+
+
+app = create_app()
 
 if __name__ == "__main__":
     uvicorn.run(

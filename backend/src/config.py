@@ -21,5 +21,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-CORS_ORIGINS = settings.cors_origins

@@ -3,14 +3,22 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
+from config import Settings
 from core.exceptions import AppException
-from main import app
+from main import create_app
 
 PROBE_PREFIX = "/__test__"
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def settings() -> Settings:
+    return Settings(_env_file=None, CORS_ORIGINS="http://localhost:5173")
+
+
+@pytest.fixture
+def client(settings: Settings) -> Iterator[TestClient]:
+    app = create_app(settings)
+
     @app.get(f"{PROBE_PREFIX}/app-exception")
     async def raise_app_exception() -> None:
         raise AppException(
@@ -19,18 +27,20 @@ def client() -> Iterator[TestClient]:
             payload={"field": "value"},
         )
 
+    @app.get(f"{PROBE_PREFIX}/not-found")
+    async def raise_not_found() -> None:
+        raise AppException(
+            code="deck_not_found",
+            message="Deck not found",
+            status_code=404,
+        )
+
     @app.get(f"{PROBE_PREFIX}/unhandled")
     async def raise_unhandled() -> None:
         raise ValueError("boom")
 
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
-
-    app.router.routes = [
-        route
-        for route in app.router.routes
-        if not getattr(route, "path", "").startswith(PROBE_PREFIX)
-    ]
 
 
 def test_app_exception_returns_error_contract(client: TestClient) -> None:
@@ -44,6 +54,13 @@ def test_app_exception_returns_error_contract(client: TestClient) -> None:
     }
 
 
+def test_app_exception_uses_its_own_status_code(client: TestClient) -> None:
+    response = client.get(f"{PROBE_PREFIX}/not-found")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "deck_not_found"
+
+
 def test_unhandled_exception_is_not_leaked(client: TestClient) -> None:
     response = client.get(f"{PROBE_PREFIX}/unhandled")
 
@@ -54,3 +71,15 @@ def test_unhandled_exception_is_not_leaked(client: TestClient) -> None:
         "payload": {},
     }
     assert "boom" not in response.text
+
+
+def test_settings_ignore_the_local_env_file() -> None:
+    assert Settings(_env_file=None).APP_PORT == 8000
+
+
+def test_cors_origins_are_split_and_stripped() -> None:
+    parsed = Settings(
+        _env_file=None, CORS_ORIGINS="http://a.test, http://b.test, "
+    ).cors_origins
+
+    assert parsed == ["http://a.test", "http://b.test"]
