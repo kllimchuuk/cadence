@@ -15,3 +15,4 @@ env/
 run_tests.sh
 CLAUDE.md
 docs/
+.claude/
