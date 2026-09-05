@@ -10,7 +10,6 @@ class Settings(BaseSettings):
 
     APP_HOST: str = "127.0.0.1"
     APP_PORT: int = 8000
-    ENVIRONMENT: str = "development"
     CORS_ORIGINS: str = "http://localhost:5173"
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/cadence"
     TEST_DATABASE_URL: str = (
