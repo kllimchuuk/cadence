@@ -7,6 +7,11 @@ from config import Settings
 from core.exceptions import AppException
 from main import create_app
 
+
+class DeckNotFound(AppException):
+    status_code = 404
+
+
 PROBE_PREFIX = "/__test__"
 
 
@@ -29,11 +34,7 @@ def client(settings: Settings) -> Iterator[TestClient]:
 
     @app.get(f"{PROBE_PREFIX}/not-found")
     async def raise_not_found() -> None:
-        raise AppException(
-            code="deck_not_found",
-            message="Deck not found",
-            status_code=404,
-        )
+        raise DeckNotFound(code="deck_not_found", message="Deck not found")
 
     @app.get(f"{PROBE_PREFIX}/unhandled")
     async def raise_unhandled() -> None:

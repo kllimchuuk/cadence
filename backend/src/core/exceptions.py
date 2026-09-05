@@ -9,11 +9,8 @@ class AppException(Exception):
         code: str,
         message: str,
         payload: dict[str, object] | None = None,
-        status_code: int | None = None,
     ):
         super().__init__(message)
         self.code = code
         self.message = message
         self.payload = payload or {}
-        if status_code is not None:
-            self.status_code = status_code
