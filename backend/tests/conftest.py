@@ -1,4 +1,6 @@
+import re
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -9,6 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import Settings
 from core.database import build_engine
 from tests.helpers import alembic_config, drop_database, recreate_database
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def worktree_test_database_url(url: str) -> str:
+    if not (REPOSITORY_ROOT / ".git").is_file():
+        return url
+
+    slug = re.sub(r"[^a-z0-9]+", "_", REPOSITORY_ROOT.name.lower().rsplit("-", 1)[-1])
+    parsed = make_url(url)
+    database = f'{parsed.database.removesuffix("_test")}_{slug}_test'
+
+    return parsed.set(database=database).render_as_string(hide_password=False)
 
 
 def pytest_configure() -> None:
@@ -31,7 +46,7 @@ def pytest_configure() -> None:
 
 @pytest.fixture(scope="session")
 def database_url() -> str:
-    return Settings().TEST_DATABASE_URL
+    return worktree_test_database_url(Settings().TEST_DATABASE_URL)
 
 
 @pytest.fixture(scope="session")
