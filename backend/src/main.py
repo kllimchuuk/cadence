@@ -1,4 +1,6 @@
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -6,9 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import Settings, settings
+from core.database import build_engine, build_session_factory
 from core.exceptions import AppException
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    yield
+    await app.state.db_engine.dispose()
 
 
 async def domain_exception_handler(
@@ -41,7 +50,10 @@ async def unhandled_exception_handler(
 def create_app(app_settings: Settings | None = None) -> FastAPI:
     app_settings = app_settings or settings
 
-    app = FastAPI()
+    app = FastAPI(lifespan=lifespan)
+    app.state.settings = app_settings
+    app.state.db_engine = build_engine(app_settings.DATABASE_URL)
+    app.state.session_factory = build_session_factory(app.state.db_engine)
 
     app.add_exception_handler(AppException, domain_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
