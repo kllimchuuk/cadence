@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from auth.router import router as auth_router
 from config import Settings, settings
 from core.database import build_engine, build_session_factory
 from core.exceptions import AppException
@@ -65,6 +66,8 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type"],
     )
+
+    app.include_router(auth_router)
 
     return app
 
