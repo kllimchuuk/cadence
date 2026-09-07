@@ -38,7 +38,7 @@ def client(migrated_schema: str) -> Iterator[TestClient]:
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
 
-    _run(migrated_schema, "TRUNCATE users")
+    _run(migrated_schema, "TRUNCATE users CASCADE")
 
 
 def _run(url: str, statement: str) -> None:
@@ -108,7 +108,7 @@ def test_updated_at_moves_on_a_later_transaction(migrated_schema: str) -> None:
             await engine.dispose()
 
     created_at, first, second = asyncio.run(scenario())
-    _run(migrated_schema, "TRUNCATE users")
+    _run(migrated_schema, "TRUNCATE users CASCADE")
 
     assert first == created_at
     assert second > first
