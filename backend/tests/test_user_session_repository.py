@@ -6,7 +6,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.repository import UserSessionRepository
-from users.repository import UserRepository
+from users.repository import UserRepositoryImpl
 
 
 @pytest.fixture
@@ -16,7 +16,7 @@ def repository(session: AsyncSession) -> UserSessionRepository:
 
 @pytest_asyncio.fixture
 async def user_id(session: AsyncSession) -> uuid.UUID:
-    user = await UserRepository(session).create(
+    user = await UserRepositoryImpl(session).create(
         email="session-owner@cadence.test", hashed_password="hashed"
     )
     return user.id
@@ -91,7 +91,7 @@ async def test_a_session_is_deleted_when_its_user_is_deleted(
     token, _ = await repository.create(user_id, timedelta(days=30))
     await session.commit()
 
-    user = await UserRepository(session).get_by_id(user_id)
+    user = await UserRepositoryImpl(session).get_by_id(user_id)
     await session.delete(user)
     await session.commit()
     session.expire_all()

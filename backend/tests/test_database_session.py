@@ -12,7 +12,7 @@ from config import Settings
 from core.database import build_engine, build_session_factory, get_db
 from main import create_app
 from users.models import User
-from users.repository import UserRepository
+from users.repository import UserRepositoryImpl
 
 PROBE_PREFIX = "/__test__"
 
@@ -25,14 +25,14 @@ def client(migrated_schema: str) -> Iterator[TestClient]:
     async def create_user(
         email: str, db: Annotated[AsyncSession, Depends(get_db)]
     ) -> dict[str, str]:
-        user = await UserRepository(db).create(email=email, hashed_password="hashed")
+        user = await UserRepositoryImpl(db).create(email=email, hashed_password="hashed")
         return {"id": str(user.id)}
 
     @app.post(f"{PROBE_PREFIX}/users-then-fail")
     async def create_user_then_fail(
         email: str, db: Annotated[AsyncSession, Depends(get_db)]
     ) -> None:
-        await UserRepository(db).create(email=email, hashed_password="hashed")
+        await UserRepositoryImpl(db).create(email=email, hashed_password="hashed")
         raise ValueError("boom")
 
     with TestClient(app, raise_server_exceptions=False) as test_client:
@@ -90,7 +90,7 @@ def test_updated_at_moves_on_a_later_transaction(migrated_schema: str) -> None:
         session_factory = build_session_factory(engine)
         try:
             async with session_factory() as session:
-                user = await UserRepository(session).create(
+                user = await UserRepositoryImpl(session).create(
                     email="bumped@cadence.test", hashed_password="hashed"
                 )
                 await session.commit()

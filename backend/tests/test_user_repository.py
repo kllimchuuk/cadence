@@ -6,12 +6,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from users.models import DEFAULT_TIMEZONE, DEFAULT_UI_LANGUAGE
-from users.repository import UserRepository
+from users.repository import UserRepository, UserRepositoryImpl
 
 
 @pytest.fixture
 def repository(session: AsyncSession) -> UserRepository:
-    return UserRepository(session)
+    return UserRepositoryImpl(session)
 
 
 @pytest.mark.asyncio

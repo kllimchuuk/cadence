@@ -7,11 +7,11 @@ from auth.repository import UserSessionRepository
 from auth.service import AuthService
 from core.database import get_db
 from users.models import User
-from users.repository import UserRepository
+from users.repository import UserRepositoryImpl
 
 
 def get_auth_service(session: AsyncSession = Depends(get_db)) -> AuthService:
-    return AuthService(UserRepository(session), UserSessionRepository(session))
+    return AuthService(UserRepositoryImpl(session), UserSessionRepository(session))
 
 
 async def get_current_user(

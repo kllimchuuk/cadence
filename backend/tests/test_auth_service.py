@@ -7,12 +7,12 @@ from auth.exceptions import EmailAlreadyRegisteredError, InvalidCredentialsError
 from auth.repository import UserSessionRepository
 from auth.service import AuthService
 from core.security import hash_password, verify_password
-from users.repository import UserRepository
+from users.repository import UserRepositoryImpl
 
 
 @pytest.fixture
 def service(session: AsyncSession) -> AuthService:
-    return AuthService(UserRepository(session), UserSessionRepository(session))
+    return AuthService(UserRepositoryImpl(session), UserSessionRepository(session))
 
 
 @pytest.mark.asyncio
@@ -138,7 +138,7 @@ async def test_authenticating_extends_the_session(
 async def test_a_stale_hash_is_upgraded_on_login(
     session: AsyncSession, service: AuthService
 ) -> None:
-    repository = UserRepository(session)
+    repository = UserRepositoryImpl(session)
     await repository.create(
         email="legacy@cadence.test",
         hashed_password=hash_password("a-strong-password"),
