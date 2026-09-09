@@ -81,8 +81,6 @@ class CRUDRepositorySQLAlchemy(CRUDRepository[T, ID]):
         return instance
 
     async def update_many(self, instances: list[T]) -> None:
-        if not instances:
-            return
         self._session.add_all(instances)
         await self._session.flush()
 
