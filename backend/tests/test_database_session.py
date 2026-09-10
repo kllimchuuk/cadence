@@ -25,7 +25,9 @@ def client(migrated_schema: str) -> Iterator[TestClient]:
     async def create_user(
         email: str, db: Annotated[AsyncSession, Depends(get_db)]
     ) -> dict[str, str]:
-        user = await UserRepositoryImpl(db).create(email=email, hashed_password="hashed")
+        user = await UserRepositoryImpl(db).create(
+            email=email, hashed_password="hashed"
+        )
         return {"id": str(user.id)}
 
     @app.post(f"{PROBE_PREFIX}/users-then-fail")
