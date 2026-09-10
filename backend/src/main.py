@@ -6,7 +6,9 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.sessions import SessionMiddleware
 
+from auth.oauth import build_google_oauth
 from auth.router import router as auth_router
 from config import Settings, settings
 from core.database import build_engine, build_session_factory
@@ -55,6 +57,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     app.state.settings = app_settings
     app.state.db_engine = build_engine(app_settings.DATABASE_URL)
     app.state.session_factory = build_session_factory(app.state.db_engine)
+    app.state.oauth = build_google_oauth(app_settings)
 
     app.add_exception_handler(AppException, domain_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
@@ -65,6 +68,13 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type"],
+    )
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=app_settings.SECRET_KEY,
+        session_cookie="oauth_state",
+        max_age=600,
+        https_only=app_settings.SECURE_COOKIES,
     )
 
     app.include_router(auth_router)
