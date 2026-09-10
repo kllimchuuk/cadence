@@ -92,7 +92,10 @@ def test_a_missing_secret_key_fails_fast() -> None:
         Settings(_env_file=None, **settings_kwargs(SECRET_KEY=""))
 
 
-def test_a_missing_required_field_fails_fast() -> None:
+def test_a_missing_required_field_fails_fast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("APP_HOST", raising=False)
     kwargs = {
         key: value for key, value in settings_kwargs().items() if key != "APP_HOST"
     }
