@@ -17,7 +17,11 @@ def repository(session: AsyncSession) -> UserSessionRepository:
 @pytest_asyncio.fixture
 async def user_id(session: AsyncSession) -> uuid.UUID:
     user = await UserRepositoryImpl(session).create(
-        email="session-owner@cadence.test", hashed_password="hashed"
+        email="session-owner@cadence.test",
+        first_name="Session",
+        last_name="Owner",
+        nickname="session-owner",
+        hashed_password="hashed",
     )
     return user.id
 

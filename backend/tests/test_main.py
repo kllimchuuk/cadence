@@ -2,10 +2,12 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from config import Settings
 from core.exceptions import AppException
 from main import create_app
+from tests.helpers import settings_kwargs
 
 
 class DeckNotFound(AppException):
@@ -17,7 +19,7 @@ PROBE_PREFIX = "/__test__"
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(_env_file=None, CORS_ORIGINS="http://localhost:5173")
+    return Settings(_env_file=None, **settings_kwargs())
 
 
 @pytest.fixture
@@ -75,12 +77,24 @@ def test_unhandled_exception_is_not_leaked(client: TestClient) -> None:
 
 
 def test_settings_ignore_the_local_env_file() -> None:
-    assert Settings(_env_file=None).APP_PORT == 8000
+    assert Settings(_env_file=None, **settings_kwargs()).APP_PORT == 8000
 
 
 def test_cors_origins_are_split_and_stripped() -> None:
-    parsed = Settings(
-        _env_file=None, CORS_ORIGINS="http://a.test, http://b.test, "
-    ).cors_origins
+    kwargs = settings_kwargs(CORS_ORIGINS="http://a.test, http://b.test, ")
+    parsed = Settings(_env_file=None, **kwargs).cors_origins
 
     assert parsed == ["http://a.test", "http://b.test"]
+
+
+def test_a_missing_secret_key_fails_fast() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **settings_kwargs(SECRET_KEY=""))
+
+
+def test_a_missing_required_field_fails_fast() -> None:
+    kwargs = {
+        key: value for key, value in settings_kwargs().items() if key != "APP_HOST"
+    }
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, **kwargs)

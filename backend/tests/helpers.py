@@ -14,6 +14,28 @@ from core.registry import metadata
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 
+def settings_kwargs(**overrides: str) -> dict[str, str]:
+    kwargs = {
+        "APP_HOST": "127.0.0.1",
+        "APP_PORT": "8000",
+        "CORS_ORIGINS": "http://localhost:5173",
+        "DATABASE_URL": "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/cadence",
+        "TEST_DATABASE_URL": (
+            "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/cadence_test"
+        ),
+        "SECRET_KEY": "test-secret-key",
+        "SECURE_COOKIES": "true",
+        "FRONTEND_URL": "http://localhost:5173",
+        "GOOGLE_CLIENT_ID": "test-google-client-id",
+        "GOOGLE_CLIENT_SECRET": "test-google-client-secret",
+        "GOOGLE_SERVER_METADATA_URL": (
+            "https://accounts.google.com/.well-known/openid-configuration"
+        ),
+    }
+    kwargs.update(overrides)
+    return kwargs
+
+
 def alembic_config(url: str) -> Config:
     config = Config(BACKEND_DIR / "alembic.ini")
     config.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
