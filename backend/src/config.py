@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -8,13 +9,25 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", extra="ignore")
 
-    APP_HOST: str = "127.0.0.1"
-    APP_PORT: int = 8000
-    CORS_ORIGINS: str = "http://localhost:5173"
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/cadence"
-    TEST_DATABASE_URL: str = (
-        "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/cadence_test"
-    )
+    APP_HOST: str
+    APP_PORT: int
+    CORS_ORIGINS: str
+    DATABASE_URL: str
+    TEST_DATABASE_URL: str
+    SECRET_KEY: str
+    SECURE_COOKIES: bool
+    FRONTEND_URL: str
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_SERVER_METADATA_URL: str
+
+    @model_validator(mode="after")
+    def _require_a_secret_key(self) -> "Settings":
+        if not self.SECRET_KEY:
+            raise ValueError(
+                "SECRET_KEY must be set — it signs the OAuth state cookie."
+            )
+        return self
 
     @property
     def cors_origins(self) -> list[str]:

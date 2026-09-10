@@ -11,34 +11,49 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import Settings
 from core.database import build_engine, build_session_factory, get_db
 from main import create_app
+from tests.helpers import settings_kwargs
 from users.models import User
-from users.repository import UserRepository
+from users.repository import UserRepositoryImpl
 
 PROBE_PREFIX = "/__test__"
 
 
 @pytest.fixture
 def client(migrated_schema: str) -> Iterator[TestClient]:
-    app = create_app(Settings(_env_file=None, DATABASE_URL=migrated_schema))
+    app = create_app(
+        Settings(_env_file=None, **settings_kwargs(DATABASE_URL=migrated_schema))
+    )
 
     @app.post(f"{PROBE_PREFIX}/users")
     async def create_user(
         email: str, db: Annotated[AsyncSession, Depends(get_db)]
     ) -> dict[str, str]:
-        user = await UserRepository(db).create(email=email, hashed_password="hashed")
+        user = await UserRepositoryImpl(db).create(
+            email=email,
+            first_name="Test",
+            last_name="User",
+            nickname=email.split("@")[0],
+            hashed_password="hashed",
+        )
         return {"id": str(user.id)}
 
     @app.post(f"{PROBE_PREFIX}/users-then-fail")
     async def create_user_then_fail(
         email: str, db: Annotated[AsyncSession, Depends(get_db)]
     ) -> None:
-        await UserRepository(db).create(email=email, hashed_password="hashed")
+        await UserRepositoryImpl(db).create(
+            email=email,
+            first_name="Test",
+            last_name="User",
+            nickname=email.split("@")[0],
+            hashed_password="hashed",
+        )
         raise ValueError("boom")
 
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
 
-    _run(migrated_schema, "TRUNCATE users")
+    _run(migrated_schema, "TRUNCATE users CASCADE")
 
 
 def _run(url: str, statement: str) -> None:
@@ -90,8 +105,12 @@ def test_updated_at_moves_on_a_later_transaction(migrated_schema: str) -> None:
         session_factory = build_session_factory(engine)
         try:
             async with session_factory() as session:
-                user = await UserRepository(session).create(
-                    email="bumped@cadence.test", hashed_password="hashed"
+                user = await UserRepositoryImpl(session).create(
+                    email="bumped@cadence.test",
+                    first_name="Bumped",
+                    last_name="User",
+                    nickname="bumped",
+                    hashed_password="hashed",
                 )
                 await session.commit()
                 created_at, first = user.created_at, user.updated_at
@@ -108,7 +127,7 @@ def test_updated_at_moves_on_a_later_transaction(migrated_schema: str) -> None:
             await engine.dispose()
 
     created_at, first, second = asyncio.run(scenario())
-    _run(migrated_schema, "TRUNCATE users")
+    _run(migrated_schema, "TRUNCATE users CASCADE")
 
     assert first == created_at
     assert second > first
