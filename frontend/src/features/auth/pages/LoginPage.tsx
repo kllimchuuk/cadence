@@ -1,0 +1,42 @@
+import { Link } from 'react-router-dom'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { GoogleSignInButton } from '../components/GoogleSignInButton'
+import { LoginForm } from '../components/LoginForm'
+
+export function LoginPage() {
+  return (
+    <main className="flex min-h-svh items-center justify-center p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle>Log in</CardTitle>
+          <CardDescription>Welcome back to Cadence.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <LoginForm />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <GoogleSignInButton />
+        </CardContent>
+        <CardFooter className="justify-center text-sm">
+          No account yet?&nbsp;
+          <Link
+            to="/register"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Register
+          </Link>
+        </CardFooter>
+      </Card>
+    </main>
+  )
+}
