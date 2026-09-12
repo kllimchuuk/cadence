@@ -5,13 +5,13 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.repository import UserSessionRepository
+from auth.repository import UserSessionRepository, UserSessionRepositoryImpl
 from users.repository import UserRepositoryImpl
 
 
 @pytest.fixture
 def repository(session: AsyncSession) -> UserSessionRepository:
-    return UserSessionRepository(session)
+    return UserSessionRepositoryImpl(session)
 
 
 @pytest_asyncio.fixture
