@@ -58,14 +58,16 @@ async def test_the_raw_token_is_never_persisted(
 
 @pytest.mark.asyncio
 async def test_extending_a_session_pushes_its_expiry_forward(
-    repository: UserSessionRepository, user_id: uuid.UUID
+    session: AsyncSession, repository: UserSessionRepository, user_id: uuid.UUID
 ) -> None:
-    _, record = await repository.create(user_id, timedelta(days=1))
+    token, record = await repository.create(user_id, timedelta(days=1))
     original_expiry = record.expires_at
 
     await repository.extend(record, timedelta(days=30))
+    session.expunge(record)
 
-    assert record.expires_at > original_expiry
+    reloaded = await repository.get_by_token(token)
+    assert reloaded.expires_at > original_expiry
 
 
 @pytest.mark.asyncio

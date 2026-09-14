@@ -54,6 +54,7 @@ class UserSessionRepositoryImpl(UserSessionRepository):
 
     async def extend(self, record: UserSession, ttl: timedelta) -> None:
         record.expires_at = datetime.now(UTC) + ttl
+        await self._session.flush()
 
     async def delete_by_token(self, token: str) -> None:
         await self._session.execute(
