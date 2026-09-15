@@ -16,14 +16,6 @@ class CRUDRepository(ABC, Generic[T, ID]):
         raise NotImplementedError()
 
     @abstractmethod
-    async def get_by_ids(self, ids: list[ID]) -> list[T]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    async def get_all(self) -> list[T]:
-        raise NotImplementedError()
-
-    @abstractmethod
     async def has(self, id: ID) -> bool:
         raise NotImplementedError()
 
@@ -51,16 +43,6 @@ class CRUDRepositorySQLAlchemy(CRUDRepository[T, ID]):
 
     async def get_by_id(self, id: ID) -> T | None:
         return await self._session.get(self._model, id)
-
-    async def get_by_ids(self, ids: list[ID]) -> list[T]:
-        result = await self._session.execute(
-            select(self._model).where(self._model.id.in_(ids))
-        )
-        return list(result.scalars().all())
-
-    async def get_all(self) -> list[T]:
-        result = await self._session.execute(select(self._model))
-        return list(result.scalars().all())
 
     async def has(self, id: ID) -> bool:
         result = await self._session.execute(
