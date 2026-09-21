@@ -8,3 +8,4 @@ class SessionState(TypedDict):
     scenario_id: str
     transcript: list[dict[str, str]]
     turn_count: int
+    should_exit: bool
