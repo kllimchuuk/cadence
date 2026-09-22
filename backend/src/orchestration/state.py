@@ -1,11 +1,12 @@
+import operator
 import uuid
-from typing import TypedDict
+from typing import Annotated, TypedDict
 
 
 class SessionState(TypedDict):
     session_id: uuid.UUID
     user_id: uuid.UUID
     scenario_id: str
-    transcript: list[dict[str, str]]
+    transcript: Annotated[list[dict[str, str]], operator.add]
     turn_count: int
     should_exit: bool
