@@ -5,6 +5,16 @@ import pytest
 from orchestration.graph import build_session_graph
 
 
+class _FakeLLMClient:
+    def __init__(self, reply: str) -> None:
+        self._reply = reply
+        self.received_prompts: list[str] = []
+
+    async def generate(self, prompt: str) -> str:
+        self.received_prompts.append(prompt)
+        return self._reply
+
+
 def _initial_state() -> dict[str, object]:
     return {
         "session_id": uuid.uuid4(),
@@ -16,20 +26,22 @@ def _initial_state() -> dict[str, object]:
     }
 
 
-def _config(responder: object) -> dict[str, object]:
-    return {"configurable": {"responder": responder}}
-
-
-def _placeholder_responder() -> tuple[str, str]:
-    return "Hello!", "That's a great start — tell me more."
+def _config(
+    briefing_llm: _FakeLLMClient, conversing_llm: _FakeLLMClient
+) -> dict[str, object]:
+    return {
+        "configurable": {"briefing_llm": briefing_llm, "conversing_llm": conversing_llm}
+    }
 
 
 @pytest.mark.asyncio
 async def test_conversing_loops_until_should_exit_then_wraps_up() -> None:
     graph = build_session_graph()
+    briefing_llm = _FakeLLMClient("Hi, thanks for joining!")
+    conversing_llm = _FakeLLMClient("That's a great start — tell me more.")
 
     result = await graph.ainvoke(
-        _initial_state(), config=_config(_placeholder_responder)
+        _initial_state(), config=_config(briefing_llm, conversing_llm)
     )
 
     assert [entry["role"] for entry in result["transcript"]] == [
@@ -45,16 +57,23 @@ async def test_conversing_loops_until_should_exit_then_wraps_up() -> None:
 
 
 @pytest.mark.asyncio
-async def test_conversing_uses_the_injected_responder_not_a_hardcoded_one() -> None:
+async def test_conversing_uses_the_injected_llm_reply_not_a_hardcoded_one() -> None:
     graph = build_session_graph()
+    briefing_llm = _FakeLLMClient("injected briefing line")
+    conversing_llm = _FakeLLMClient("injected conversing reply")
 
-    def fake_responder() -> tuple[str, str]:
-        return "injected user turn", "injected assistant reply"
+    result = await graph.ainvoke(
+        _initial_state(), config=_config(briefing_llm, conversing_llm)
+    )
 
-    result = await graph.ainvoke(_initial_state(), config=_config(fake_responder))
-
-    assert result["transcript"][1] == {"role": "user", "content": "injected user turn"}
+    assert result["transcript"][0] == {
+        "role": "assistant",
+        "content": "injected briefing line",
+    }
     assert result["transcript"][2] == {
         "role": "assistant",
-        "content": "injected assistant reply",
+        "content": "injected conversing reply",
     }
+    assert (
+        conversing_llm.received_prompts
+    ), "conversing_node never called its llm_client"
