@@ -11,6 +11,7 @@ from orchestration.schemas import SessionAnalysisResult, SkillObservation
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
+from weaknesses.models import WeaknessCategory, WeaknessState
 from weaknesses.repository import WeaknessRecordRepositoryImpl
 from weaknesses.service import WeaknessService
 
@@ -52,7 +53,7 @@ async def user_id(session: AsyncSession) -> uuid.UUID:
 
 
 @pytest.mark.asyncio
-async def test_session_analysis_writes_a_real_analysis_row(
+async def test_weakness_state_update_writes_a_real_weakness_record(
     session: AsyncSession, user_id: uuid.UUID
 ) -> None:
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
@@ -60,8 +61,9 @@ async def test_session_analysis_writes_a_real_analysis_row(
     analysis_service = AnalysisService(
         SessionAnalysisRepositoryImpl(session), LearningSessionRepositoryImpl(session)
     )
+    weakness_repository = WeaknessRecordRepositoryImpl(session)
     weakness_service = WeaknessService(
-        WeaknessRecordRepositoryImpl(session), LearningSessionRepositoryImpl(session)
+        weakness_repository, LearningSessionRepositoryImpl(session)
     )
 
     graph = build_session_graph()
@@ -71,10 +73,10 @@ async def test_session_analysis_writes_a_real_analysis_row(
             "conversing_llm": _FakeLLMClient("That's a great start — tell me more."),
             "session_analysis_llm": _FakeStructuredLLMClient(
                 SessionAnalysisResult(
-                    grammar_findings=[{"note": "past tense slip"}],
+                    grammar_findings=[],
                     vocabulary_findings=[],
-                    fluency_findings={"filler_word_count": 2},
-                    task_completion={"completed_items": ["greet the interviewer"]},
+                    fluency_findings={},
+                    task_completion={},
                     focus_points=["Practice past-tense verbs"],
                     skill_observations=[
                         SkillObservation(
@@ -84,7 +86,7 @@ async def test_session_analysis_writes_a_real_analysis_row(
                             note="Used present tense for a past event.",
                         )
                     ],
-                    new_facts=["User is preparing for a backend interview."],
+                    new_facts=[],
                 )
             ),
             "analysis_service": analysis_service,
@@ -104,7 +106,9 @@ async def test_session_analysis_writes_a_real_analysis_row(
         config=config,
     )
 
-    stored = await analysis_service.get_analysis(learning_session.id, user_id)
-    assert stored is not None
-    assert stored.focus_points == ["Practice past-tense verbs"]
-    assert stored.grammar_findings == [{"note": "past tense slip"}]
+    record = await weakness_repository.get_by_user_and_skill(
+        user_id, WeaknessCategory.GRAMMAR, "past_simple"
+    )
+    assert record is not None
+    assert record.state == WeaknessState.ACTIVE
+    assert record.last_session_id == learning_session.id

@@ -4,6 +4,7 @@ import pytest
 
 from orchestration.graph import build_session_graph
 from orchestration.schemas import SessionAnalysisResult, SkillObservation
+from weaknesses.models import WeaknessCategory
 
 
 class _FakeLLMClient:
@@ -38,6 +39,30 @@ class _FakeAnalysisService:
 
     async def create_analysis(self, **kwargs: object) -> None:
         self.created_with = kwargs
+
+
+class _FakeWeaknessService:
+    def __init__(self) -> None:
+        self.errors: list[tuple[object, ...]] = []
+        self.clean_uses: list[tuple[object, ...]] = []
+
+    async def record_error(
+        self,
+        user_id: uuid.UUID,
+        category: WeaknessCategory,
+        skill_key: str,
+        session_id: uuid.UUID,
+    ) -> None:
+        self.errors.append((user_id, category, skill_key, session_id))
+
+    async def record_clean_use(
+        self,
+        user_id: uuid.UUID,
+        category: WeaknessCategory,
+        skill_key: str,
+        session_id: uuid.UUID,
+    ) -> None:
+        self.clean_uses.append((user_id, category, skill_key, session_id))
 
 
 def _default_analysis_result() -> SessionAnalysisResult:
@@ -75,6 +100,7 @@ def _config(
     conversing_llm: _FakeLLMClient,
     analysis_service: _FakeAnalysisService | None = None,
     analysis_result: SessionAnalysisResult | None = None,
+    weakness_service: _FakeWeaknessService | None = None,
 ) -> dict[str, object]:
     return {
         "configurable": {
@@ -84,6 +110,7 @@ def _config(
                 analysis_result or _default_analysis_result()
             ),
             "analysis_service": analysis_service or _FakeAnalysisService(),
+            "weakness_service": weakness_service or _FakeWeaknessService(),
         }
     }
 
@@ -168,3 +195,54 @@ async def test_session_analysis_records_the_analysis_and_forwards_its_findings()
         }
     ]
     assert result["persona_facts"] == ["User is preparing for a backend interview."]
+
+
+@pytest.mark.asyncio
+async def test_weakness_state_update_routes_observations_by_outcome() -> None:
+    graph = build_session_graph()
+    weakness_service = _FakeWeaknessService()
+    state = _initial_state()
+    analysis_result = SessionAnalysisResult(
+        grammar_findings=[],
+        vocabulary_findings=[],
+        fluency_findings={},
+        task_completion={},
+        focus_points=["Practice past-tense verbs"],
+        skill_observations=[
+            SkillObservation(
+                category="grammar",
+                skill_key="past_simple",
+                outcome="error",
+                note="Used present tense for a past event.",
+            ),
+            SkillObservation(
+                category="vocabulary",
+                skill_key="business_idioms",
+                outcome="clean",
+                note="Used 'touch base' correctly.",
+            ),
+        ],
+        new_facts=[],
+    )
+
+    await graph.ainvoke(
+        state,
+        config=_config(
+            _FakeLLMClient("hi"),
+            _FakeLLMClient("hi"),
+            analysis_result=analysis_result,
+            weakness_service=weakness_service,
+        ),
+    )
+
+    assert weakness_service.errors == [
+        (state["user_id"], WeaknessCategory.GRAMMAR, "past_simple", state["session_id"])
+    ]
+    assert weakness_service.clean_uses == [
+        (
+            state["user_id"],
+            WeaknessCategory.VOCABULARY,
+            "business_idioms",
+            state["session_id"],
+        )
+    ]

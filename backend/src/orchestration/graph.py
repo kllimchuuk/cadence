@@ -5,6 +5,7 @@ from langgraph.graph.state import CompiledStateGraph
 from orchestration.nodes.briefing import briefing_node
 from orchestration.nodes.conversing import conversing_node
 from orchestration.nodes.session_analysis import session_analysis_node
+from orchestration.nodes.weakness_state_update import weakness_state_update_node
 from orchestration.nodes.wrap_up import wrap_up_node
 from orchestration.state import SessionState
 
@@ -21,6 +22,7 @@ def build_session_graph(
     graph.add_node("conversing", conversing_node)
     graph.add_node("wrap_up", wrap_up_node)
     graph.add_node("session_analysis", session_analysis_node)
+    graph.add_node("weakness_state_update", weakness_state_update_node)
 
     graph.add_edge(START, "briefing")
     graph.add_edge("briefing", "conversing")
@@ -28,6 +30,7 @@ def build_session_graph(
         "conversing", decide_exit, {"continue": "conversing", "exit": "wrap_up"}
     )
     graph.add_edge("wrap_up", "session_analysis")
-    graph.add_edge("session_analysis", END)
+    graph.add_edge("session_analysis", "weakness_state_update")
+    graph.add_edge("weakness_state_update", END)
 
     return graph.compile(checkpointer=checkpointer)

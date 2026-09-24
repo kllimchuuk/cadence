@@ -42,6 +42,14 @@ class _FakeAnalysisService:
         pass
 
 
+class _FakeWeaknessService:
+    async def record_error(self, *args: object) -> None:
+        pass
+
+    async def record_clean_use(self, *args: object) -> None:
+        pass
+
+
 def _psycopg_dsn(database_url: str) -> str:
     return (
         make_url(database_url)
@@ -69,6 +77,7 @@ def _config(thread_id: str) -> dict[str, object]:
             "conversing_llm": _FakeLLMClient("That's a great start — tell me more."),
             "session_analysis_llm": _FakeStructuredLLMClient(),
             "analysis_service": _FakeAnalysisService(),
+            "weakness_service": _FakeWeaknessService(),
         }
     }
 
