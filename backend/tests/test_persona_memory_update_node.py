@@ -86,6 +86,7 @@ async def test_persona_memory_update_writes_real_facts(
             "analysis_service": analysis_service,
             "weakness_service": weakness_service,
             "persona_service": persona_service,
+            "practice_service": practice_service,
         }
     }
 

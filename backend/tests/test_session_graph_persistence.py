@@ -50,6 +50,11 @@ class _FakeWeaknessService:
         pass
 
 
+class _FakePracticeService:
+    async def finish_session(self, *args: object) -> None:
+        pass
+
+
 def _psycopg_dsn(database_url: str) -> str:
     return (
         make_url(database_url)
@@ -78,6 +83,7 @@ def _config(thread_id: str) -> dict[str, object]:
             "session_analysis_llm": _FakeStructuredLLMClient(),
             "analysis_service": _FakeAnalysisService(),
             "weakness_service": _FakeWeaknessService(),
+            "practice_service": _FakePracticeService(),
         }
     }
 

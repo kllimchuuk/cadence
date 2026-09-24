@@ -93,6 +93,7 @@ async def test_session_analysis_writes_a_real_analysis_row(
             "analysis_service": analysis_service,
             "weakness_service": weakness_service,
             "persona_service": persona_service,
+            "practice_service": practice_service,
         }
     }
 

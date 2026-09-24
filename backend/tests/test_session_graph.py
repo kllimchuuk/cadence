@@ -75,6 +75,20 @@ class _FakePersonaService:
         self.remembered_with = (user_id, scenario_id, new_facts)
 
 
+class _FakePracticeService:
+    def __init__(self) -> None:
+        self.finished_with: tuple[uuid.UUID, uuid.UUID, str, list[dict]] | None = None
+
+    async def finish_session(
+        self,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+        status: str,
+        transcript: list[dict],
+    ) -> None:
+        self.finished_with = (session_id, user_id, status, transcript)
+
+
 def _default_analysis_result() -> SessionAnalysisResult:
     return SessionAnalysisResult(
         grammar_findings=[],
@@ -112,6 +126,7 @@ def _config(
     analysis_result: SessionAnalysisResult | None = None,
     weakness_service: _FakeWeaknessService | None = None,
     persona_service: _FakePersonaService | None = None,
+    practice_service: _FakePracticeService | None = None,
 ) -> dict[str, object]:
     return {
         "configurable": {
@@ -123,6 +138,7 @@ def _config(
             "analysis_service": analysis_service or _FakeAnalysisService(),
             "weakness_service": weakness_service or _FakeWeaknessService(),
             "persona_service": persona_service or _FakePersonaService(),
+            "practice_service": practice_service or _FakePracticeService(),
         }
     }
 
@@ -307,3 +323,26 @@ async def test_persona_memory_update_skips_the_service_when_there_are_no_new_fac
     )
 
     assert persona_service.remembered_with is None
+
+
+@pytest.mark.asyncio
+async def test_finish_session_closes_the_learning_session_as_completed() -> None:
+    graph = build_session_graph()
+    practice_service = _FakePracticeService()
+    state = _initial_state()
+
+    result = await graph.ainvoke(
+        state,
+        config=_config(
+            _FakeLLMClient("hi"),
+            _FakeLLMClient("hi"),
+            practice_service=practice_service,
+        ),
+    )
+
+    assert practice_service.finished_with == (
+        state["session_id"],
+        state["user_id"],
+        "completed",
+        result["transcript"],
+    )
