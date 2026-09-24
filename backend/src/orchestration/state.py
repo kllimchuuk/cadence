@@ -10,3 +10,5 @@ class SessionState(TypedDict):
     transcript: Annotated[list[dict[str, str]], operator.add]
     turn_count: int
     should_exit: bool
+    skill_observations: list[dict[str, str]]
+    persona_facts: list[str]
