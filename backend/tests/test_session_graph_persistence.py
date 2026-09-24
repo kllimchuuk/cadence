@@ -5,6 +5,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from sqlalchemy.engine import make_url
 
 from orchestration.graph import build_session_graph
+from orchestration.schemas import SessionAnalysisResult
 
 
 class _FakeLLMClient:
@@ -13,6 +14,32 @@ class _FakeLLMClient:
 
     async def generate(self, _prompt: str) -> str:
         return self._reply
+
+    async def generate_structured(self, prompt: str, schema: type) -> object:
+        raise NotImplementedError()
+
+
+class _FakeStructuredLLMClient:
+    async def generate(self, prompt: str) -> str:
+        raise NotImplementedError()
+
+    async def generate_structured(
+        self, prompt: str, schema: type
+    ) -> SessionAnalysisResult:
+        return SessionAnalysisResult(
+            grammar_findings=[],
+            vocabulary_findings=[],
+            fluency_findings={},
+            task_completion={},
+            focus_points=["Practice past-tense verbs"],
+            skill_observations=[],
+            new_facts=[],
+        )
+
+
+class _FakeAnalysisService:
+    async def create_analysis(self, **kwargs: object) -> None:
+        pass
 
 
 def _psycopg_dsn(database_url: str) -> str:
@@ -40,6 +67,8 @@ def _config(thread_id: str) -> dict[str, object]:
             "thread_id": thread_id,
             "briefing_llm": _FakeLLMClient("Hi, thanks for joining!"),
             "conversing_llm": _FakeLLMClient("That's a great start — tell me more."),
+            "session_analysis_llm": _FakeStructuredLLMClient(),
+            "analysis_service": _FakeAnalysisService(),
         }
     }
 
