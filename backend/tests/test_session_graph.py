@@ -65,6 +65,16 @@ class _FakeWeaknessService:
         self.clean_uses.append((user_id, category, skill_key, session_id))
 
 
+class _FakePersonaService:
+    def __init__(self) -> None:
+        self.remembered_with: tuple[uuid.UUID, str, list[str]] | None = None
+
+    async def remember(
+        self, user_id: uuid.UUID, scenario_id: str, new_facts: list[str]
+    ) -> None:
+        self.remembered_with = (user_id, scenario_id, new_facts)
+
+
 def _default_analysis_result() -> SessionAnalysisResult:
     return SessionAnalysisResult(
         grammar_findings=[],
@@ -101,6 +111,7 @@ def _config(
     analysis_service: _FakeAnalysisService | None = None,
     analysis_result: SessionAnalysisResult | None = None,
     weakness_service: _FakeWeaknessService | None = None,
+    persona_service: _FakePersonaService | None = None,
 ) -> dict[str, object]:
     return {
         "configurable": {
@@ -111,6 +122,7 @@ def _config(
             ),
             "analysis_service": analysis_service or _FakeAnalysisService(),
             "weakness_service": weakness_service or _FakeWeaknessService(),
+            "persona_service": persona_service or _FakePersonaService(),
         }
     }
 
@@ -246,3 +258,52 @@ async def test_weakness_state_update_routes_observations_by_outcome() -> None:
             state["session_id"],
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_persona_memory_update_forwards_new_facts() -> None:
+    graph = build_session_graph()
+    persona_service = _FakePersonaService()
+    state = _initial_state()
+
+    await graph.ainvoke(
+        state,
+        config=_config(
+            _FakeLLMClient("hi"), _FakeLLMClient("hi"), persona_service=persona_service
+        ),
+    )
+
+    assert persona_service.remembered_with == (
+        state["user_id"],
+        "job_interview",
+        ["User is preparing for a backend interview."],
+    )
+
+
+@pytest.mark.asyncio
+async def test_persona_memory_update_skips_the_service_when_there_are_no_new_facts() -> (
+    None
+):
+    graph = build_session_graph()
+    persona_service = _FakePersonaService()
+    analysis_result = SessionAnalysisResult(
+        grammar_findings=[],
+        vocabulary_findings=[],
+        fluency_findings={},
+        task_completion={},
+        focus_points=["Practice past-tense verbs"],
+        skill_observations=[],
+        new_facts=[],
+    )
+
+    await graph.ainvoke(
+        _initial_state(),
+        config=_config(
+            _FakeLLMClient("hi"),
+            _FakeLLMClient("hi"),
+            analysis_result=analysis_result,
+            persona_service=persona_service,
+        ),
+    )
+
+    assert persona_service.remembered_with is None
