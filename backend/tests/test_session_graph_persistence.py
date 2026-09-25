@@ -6,7 +6,7 @@ from sqlalchemy.engine import make_url
 
 from core.database import build_engine, build_session_factory
 from orchestration.context import SessionRuntimeContext
-from orchestration.graph import build_session_graph
+from orchestration.graph import build_session_graph, recursion_limit_for_session
 from orchestration.schemas import SessionAnalysisResult
 from practice.models import SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
@@ -95,7 +95,10 @@ async def test_a_finished_session_is_readable_from_a_fresh_checkpointer(
                 invoked_result = await graph.ainvoke(
                     initial_state,
                     context=context,
-                    config={"configurable": {"thread_id": thread_id}},
+                    config={
+                        "configurable": {"thread_id": thread_id},
+                        "recursion_limit": recursion_limit_for_session(),
+                    },
                 )
 
             async with AsyncPostgresSaver.from_conn_string(

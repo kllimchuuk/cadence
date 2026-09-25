@@ -8,7 +8,7 @@ from persona.service import PersonaService
 from scenarios.config import get_scenario
 
 _PLACEHOLDER_USER_TURN = "Hello!"
-_MAX_PLACEHOLDER_TURNS = 2
+MAX_CONVERSATION_TURNS = 2
 
 
 def _build_prompt(
@@ -40,5 +40,5 @@ async def conversing_node(
             {"role": "assistant", "content": assistant_reply},
         ],
         "turn_count": turn_count,
-        "should_exit": turn_count >= _MAX_PLACEHOLDER_TURNS,
+        "should_exit": turn_count >= MAX_CONVERSATION_TURNS,
     }

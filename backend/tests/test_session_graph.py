@@ -2,11 +2,13 @@ import uuid
 
 import pytest
 import pytest_asyncio
+from langgraph.errors import GraphRecursionError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from llm.exceptions import LLMResponseError
 from orchestration.context import SessionRuntimeContext
-from orchestration.graph import build_session_graph
+from orchestration.graph import build_session_graph, recursion_limit_for_session
+from orchestration.nodes import conversing as conversing_node_module
 from orchestration.schemas import SessionAnalysisResult, SkillObservation
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
@@ -351,3 +353,34 @@ async def test_briefing_gives_up_after_exhausting_retries(
         )
 
     assert briefing_llm.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_recursion_limit_for_session_is_enough_for_a_full_run(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(conversing_node_module, "MAX_CONVERSATION_TURNS", 20)
+
+    practice_service = PracticeService(LearningSessionRepositoryImpl(session))
+    learning_session = await practice_service.start_session(user_id, "job_interview")
+    context = _context(session_factory, _FakeLLMClient("hi"), _FakeLLMClient("hi"))
+    graph = build_session_graph()
+
+    with pytest.raises(GraphRecursionError):
+        await graph.ainvoke(
+            _initial_state(learning_session.id, user_id),
+            context=context,
+            config={"recursion_limit": 10},
+        )
+
+    result = await graph.ainvoke(
+        _initial_state(learning_session.id, user_id),
+        context=context,
+        config={"recursion_limit": recursion_limit_for_session()},
+    )
+
+    assert result["turn_count"] == 20
+    assert result["should_exit"] is True
