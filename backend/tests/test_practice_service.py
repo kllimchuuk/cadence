@@ -8,6 +8,7 @@ from practice.exceptions import InvalidSessionStatusError, LearningSessionNotFou
 from practice.models import SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
+from scenarios.exceptions import UnknownScenarioError
 from users.repository import UserRepositoryImpl
 
 
@@ -50,6 +51,14 @@ async def test_a_started_session_is_read_back_by_its_id(
 
     assert found.id == started.id
     assert found.status == SessionStatus.IN_PROGRESS
+
+
+@pytest.mark.asyncio
+async def test_starting_a_session_for_an_unknown_scenario_is_rejected(
+    service: PracticeService, user_id: uuid.UUID
+) -> None:
+    with pytest.raises(UnknownScenarioError):
+        await service.start_session(user_id, "not_a_real_scenario")
 
 
 @pytest.mark.asyncio

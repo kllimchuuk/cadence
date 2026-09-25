@@ -6,22 +6,27 @@ from orchestration.context import SessionRuntimeContext
 from orchestration.schemas import SessionAnalysisResult
 from orchestration.state import SessionState
 from practice.repository import LearningSessionRepositoryImpl
+from scenarios.config import Scenario, get_scenario
 
 
-def _build_prompt(transcript: list[dict[str, str]]) -> str:
+def _build_prompt(scenario: Scenario, transcript: list[dict[str, str]]) -> str:
     history = "\n".join(f'{entry["role"]}: {entry["content"]}' for entry in transcript)
+    goals = "; ".join(scenario.goal_checklist)
     return (
         "Analyse this practice-conversation transcript for grammar, vocabulary, "
-        "fluency and task completion. Report 1-3 focus points, one observation "
-        "per tracked skill (error or clean use), and any new facts about the "
-        f"user worth remembering for next time.\n\n{history}"
+        "fluency and task completion. Score task completion against this "
+        f"checklist: {goals}.\n"
+        "Report 1-3 focus points, one observation per tracked skill (error or "
+        "clean use), and any new facts about the user worth remembering for "
+        f"next time.\n\n{history}"
     )
 
 
 async def session_analysis_node(
     state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
 ) -> dict[str, object]:
-    prompt = _build_prompt(state["transcript"])
+    scenario = get_scenario(state["scenario_id"])
+    prompt = _build_prompt(scenario, state["transcript"])
     result = await runtime.context.session_analysis_llm.generate_structured(
         prompt, SessionAnalysisResult
     )

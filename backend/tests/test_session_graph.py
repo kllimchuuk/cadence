@@ -11,6 +11,7 @@ from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
+from scenarios.config import get_scenario
 from users.repository import UserRepositoryImpl
 
 
@@ -30,6 +31,7 @@ class _FakeLLMClient:
 class _FakeStructuredLLMClient:
     def __init__(self, result: SessionAnalysisResult) -> None:
         self._result = result
+        self.received_prompts: list[str] = []
 
     async def generate(self, prompt: str) -> str:
         raise NotImplementedError()
@@ -37,6 +39,7 @@ class _FakeStructuredLLMClient:
     async def generate_structured(
         self, prompt: str, schema: type
     ) -> SessionAnalysisResult:
+        self.received_prompts.append(prompt)
         return self._result
 
 
@@ -221,3 +224,67 @@ async def test_persona_memory_update_skips_the_service_when_there_are_no_new_fac
     persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
     memory = await persona_service.get_memory(user_id, "job_interview")
     assert memory is None
+
+
+@pytest.mark.asyncio
+async def test_briefing_and_conversing_prompts_include_remembered_persona_facts(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+) -> None:
+    practice_service = PracticeService(LearningSessionRepositoryImpl(session))
+    learning_session = await practice_service.start_session(user_id, "job_interview")
+
+    persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
+    await persona_service.remember(
+        user_id, "job_interview", ["User is preparing for a backend interview."]
+    )
+
+    graph = build_session_graph()
+    briefing_llm = _FakeLLMClient("Hi again!")
+    conversing_llm = _FakeLLMClient("Great, let's continue.")
+
+    await graph.ainvoke(
+        _initial_state(learning_session.id, user_id),
+        context=_context(session_factory, briefing_llm, conversing_llm),
+    )
+
+    assert briefing_llm.received_prompts
+    assert (
+        "User is preparing for a backend interview." in briefing_llm.received_prompts[0]
+    )
+    assert conversing_llm.received_prompts
+    assert (
+        "User is preparing for a backend interview."
+        in conversing_llm.received_prompts[0]
+    )
+
+
+@pytest.mark.asyncio
+async def test_session_analysis_prompt_includes_the_scenarios_goal_checklist(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+) -> None:
+    practice_service = PracticeService(LearningSessionRepositoryImpl(session))
+    learning_session = await practice_service.start_session(user_id, "job_interview")
+    scenario = get_scenario("job_interview")
+
+    session_analysis_llm = _FakeStructuredLLMClient(_default_analysis_result())
+    context = SessionRuntimeContext(
+        briefing_llm=_FakeLLMClient("hi"),
+        conversing_llm=_FakeLLMClient("hi"),
+        session_analysis_llm=session_analysis_llm,
+        session_factory=session_factory,
+    )
+
+    graph = build_session_graph()
+    await graph.ainvoke(
+        _initial_state(learning_session.id, user_id),
+        context=context,
+    )
+
+    assert session_analysis_llm.received_prompts
+    prompt = session_analysis_llm.received_prompts[0]
+    for goal in scenario.goal_checklist:
+        assert goal in prompt

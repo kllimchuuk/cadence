@@ -6,6 +6,7 @@ from fastapi import Depends
 from practice.exceptions import InvalidSessionStatusError, LearningSessionNotFoundError
 from practice.models import LearningSession, SessionStatus
 from practice.repository import LearningSessionRepository, get_practice_repository
+from scenarios.config import get_scenario
 
 _FINISHED_STATUSES = frozenset({SessionStatus.COMPLETED, SessionStatus.INCOMPLETE})
 
@@ -17,6 +18,7 @@ class PracticeService:
     async def start_session(
         self, user_id: uuid.UUID, scenario_id: str
     ) -> LearningSession:
+        get_scenario(scenario_id)
         return await self._repository.create(user_id, scenario_id)
 
     async def get_session(
