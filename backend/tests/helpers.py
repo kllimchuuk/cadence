@@ -31,6 +31,7 @@ def settings_kwargs(**overrides: str) -> dict[str, str]:
         "GOOGLE_SERVER_METADATA_URL": (
             "https://accounts.google.com/.well-known/openid-configuration"
         ),
+        "GEMINI_API_KEY": "test-gemini-api-key",
     }
     kwargs.update(overrides)
     return kwargs

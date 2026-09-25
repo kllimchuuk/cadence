@@ -6,7 +6,7 @@ import pytest
 import pytest_asyncio
 from alembic import command
 from sqlalchemy.engine import make_url
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from config import Settings
 from core.database import build_engine
@@ -86,3 +86,12 @@ async def session(migrated_schema: str) -> AsyncIterator[AsyncSession]:
                 await transaction.rollback()
     finally:
         await engine.dispose()
+
+
+@pytest.fixture
+def session_factory(session: AsyncSession) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(
+        bind=session.bind,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
