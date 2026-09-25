@@ -4,6 +4,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from llm.exceptions import LLMResponseError
 from orchestration.context import SessionRuntimeContext
 from orchestration.graph import build_session_graph
 from orchestration.schemas import SessionAnalysisResult, SkillObservation
@@ -22,6 +23,22 @@ class _FakeLLMClient:
 
     async def generate(self, prompt: str) -> str:
         self.received_prompts.append(prompt)
+        return self._reply
+
+    async def generate_structured(self, prompt: str, schema: type) -> object:
+        raise NotImplementedError()
+
+
+class _FlakyLLMClient:
+    def __init__(self, reply: str, fail_times: int) -> None:
+        self._reply = reply
+        self._fail_times = fail_times
+        self.call_count = 0
+
+    async def generate(self, prompt: str) -> str:
+        self.call_count += 1
+        if self.call_count <= self._fail_times:
+            raise LLMResponseError("transient failure")
         return self._reply
 
     async def generate_structured(self, prompt: str, schema: type) -> object:
@@ -288,3 +305,49 @@ async def test_session_analysis_prompt_includes_the_scenarios_goal_checklist(
     prompt = session_analysis_llm.received_prompts[0]
     for goal in scenario.goal_checklist:
         assert goal in prompt
+
+
+@pytest.mark.asyncio
+async def test_briefing_recovers_from_a_transient_llm_failure(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+) -> None:
+    practice_service = PracticeService(LearningSessionRepositoryImpl(session))
+    learning_session = await practice_service.start_session(user_id, "job_interview")
+
+    graph = build_session_graph()
+    briefing_llm = _FlakyLLMClient("Hi, thanks for joining!", fail_times=2)
+    conversing_llm = _FakeLLMClient("continuing")
+
+    result = await graph.ainvoke(
+        _initial_state(learning_session.id, user_id),
+        context=_context(session_factory, briefing_llm, conversing_llm),
+    )
+
+    assert briefing_llm.call_count == 3
+    assert result["transcript"][0] == {
+        "role": "assistant",
+        "content": "Hi, thanks for joining!",
+    }
+
+
+@pytest.mark.asyncio
+async def test_briefing_gives_up_after_exhausting_retries(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+) -> None:
+    practice_service = PracticeService(LearningSessionRepositoryImpl(session))
+    learning_session = await practice_service.start_session(user_id, "job_interview")
+
+    graph = build_session_graph()
+    briefing_llm = _FlakyLLMClient("never used", fail_times=99)
+
+    with pytest.raises(LLMResponseError):
+        await graph.ainvoke(
+            _initial_state(learning_session.id, user_id),
+            context=_context(session_factory, briefing_llm, _FakeLLMClient("hi")),
+        )
+
+    assert briefing_llm.call_count == 3

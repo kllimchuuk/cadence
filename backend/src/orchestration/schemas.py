@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from weaknesses.models import WeaknessCategory
 
@@ -17,6 +17,6 @@ class SessionAnalysisResult(BaseModel):
     vocabulary_findings: list[dict]
     fluency_findings: dict
     task_completion: dict
-    focus_points: list[str]
+    focus_points: list[str] = Field(min_length=1, max_length=3)
     skill_observations: list[SkillObservation]
     new_facts: list[str]
