@@ -1,9 +1,11 @@
-from langchain_core.runnables import RunnableConfig
+from langgraph.runtime import Runtime
 
+from analysis.repository import SessionAnalysisRepositoryImpl
 from analysis.service import AnalysisService
-from llm.client import LLMClient
+from orchestration.context import SessionRuntimeContext
 from orchestration.schemas import SessionAnalysisResult
 from orchestration.state import SessionState
+from practice.repository import LearningSessionRepositoryImpl
 
 
 def _build_prompt(transcript: list[dict[str, str]]) -> str:
@@ -17,23 +19,28 @@ def _build_prompt(transcript: list[dict[str, str]]) -> str:
 
 
 async def session_analysis_node(
-    state: SessionState, config: RunnableConfig
+    state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
 ) -> dict[str, object]:
-    llm_client: LLMClient = config["configurable"]["session_analysis_llm"]
-    analysis_service: AnalysisService = config["configurable"]["analysis_service"]
-
     prompt = _build_prompt(state["transcript"])
-    result = await llm_client.generate_structured(prompt, SessionAnalysisResult)
-
-    await analysis_service.create_analysis(
-        session_id=state["session_id"],
-        user_id=state["user_id"],
-        grammar_findings=result.grammar_findings,
-        vocabulary_findings=result.vocabulary_findings,
-        fluency_findings=result.fluency_findings,
-        task_completion=result.task_completion,
-        focus_points=result.focus_points,
+    result = await runtime.context.session_analysis_llm.generate_structured(
+        prompt, SessionAnalysisResult
     )
+
+    async with runtime.context.session_factory() as session:
+        analysis_service = AnalysisService(
+            SessionAnalysisRepositoryImpl(session),
+            LearningSessionRepositoryImpl(session),
+        )
+        await analysis_service.create_analysis(
+            session_id=state["session_id"],
+            user_id=state["user_id"],
+            grammar_findings=result.grammar_findings,
+            vocabulary_findings=result.vocabulary_findings,
+            fluency_findings=result.fluency_findings,
+            task_completion=result.task_completion,
+            focus_points=result.focus_points,
+        )
+        await session.commit()
 
     return {
         "skill_observations": [

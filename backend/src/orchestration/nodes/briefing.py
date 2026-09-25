@@ -1,6 +1,6 @@
-from langchain_core.runnables import RunnableConfig
+from langgraph.runtime import Runtime
 
-from llm.client import LLMClient
+from orchestration.context import SessionRuntimeContext
 from orchestration.state import SessionState
 
 _OPENING_PROMPT = (
@@ -10,8 +10,7 @@ _OPENING_PROMPT = (
 
 
 async def briefing_node(
-    _state: SessionState, config: RunnableConfig
+    _state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
 ) -> dict[str, object]:
-    llm_client: LLMClient = config["configurable"]["briefing_llm"]
-    opening_line = await llm_client.generate(_OPENING_PROMPT)
+    opening_line = await runtime.context.briefing_llm.generate(_OPENING_PROMPT)
     return {"transcript": [{"role": "assistant", "content": opening_line}]}

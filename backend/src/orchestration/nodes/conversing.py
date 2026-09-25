@@ -1,6 +1,6 @@
-from langchain_core.runnables import RunnableConfig
+from langgraph.runtime import Runtime
 
-from llm.client import LLMClient
+from orchestration.context import SessionRuntimeContext
 from orchestration.state import SessionState
 
 _PLACEHOLDER_USER_TURN = "Hello!"
@@ -13,11 +13,10 @@ def _build_prompt(transcript: list[dict[str, str]], user_turn: str) -> str:
 
 
 async def conversing_node(
-    state: SessionState, config: RunnableConfig
+    state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
 ) -> dict[str, object]:
-    llm_client: LLMClient = config["configurable"]["conversing_llm"]
     prompt = _build_prompt(state["transcript"], _PLACEHOLDER_USER_TURN)
-    assistant_reply = await llm_client.generate(prompt)
+    assistant_reply = await runtime.context.conversing_llm.generate(prompt)
 
     turn_count = state["turn_count"] + 1
     return {

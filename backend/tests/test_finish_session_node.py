@@ -2,20 +2,15 @@ import uuid
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from analysis.repository import SessionAnalysisRepositoryImpl
-from analysis.service import AnalysisService
+from orchestration.context import SessionRuntimeContext
 from orchestration.graph import build_session_graph
 from orchestration.schemas import SessionAnalysisResult
-from persona.repository import PersonaMemoryRepositoryImpl
-from persona.service import PersonaService
 from practice.models import SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
-from weaknesses.repository import WeaknessRecordRepositoryImpl
-from weaknesses.service import WeaknessService
 
 
 class _FakeLLMClient:
@@ -61,44 +56,36 @@ async def user_id(session: AsyncSession) -> uuid.UUID:
 
 @pytest.mark.asyncio
 async def test_finish_session_closes_a_real_learning_session(
-    session: AsyncSession, user_id: uuid.UUID
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
 ) -> None:
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
-    analysis_service = AnalysisService(
-        SessionAnalysisRepositoryImpl(session), LearningSessionRepositoryImpl(session)
-    )
-    weakness_service = WeaknessService(
-        WeaknessRecordRepositoryImpl(session), LearningSessionRepositoryImpl(session)
-    )
-    persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
+    session_id = learning_session.id
 
     graph = build_session_graph()
-    config = {
-        "configurable": {
-            "briefing_llm": _FakeLLMClient("Hi, thanks for joining!"),
-            "conversing_llm": _FakeLLMClient("That's a great start — tell me more."),
-            "session_analysis_llm": _FakeStructuredLLMClient(),
-            "analysis_service": analysis_service,
-            "weakness_service": weakness_service,
-            "persona_service": persona_service,
-            "practice_service": practice_service,
-        }
-    }
+    context = SessionRuntimeContext(
+        briefing_llm=_FakeLLMClient("Hi, thanks for joining!"),
+        conversing_llm=_FakeLLMClient("That's a great start — tell me more."),
+        session_analysis_llm=_FakeStructuredLLMClient(),
+        session_factory=session_factory,
+    )
 
     await graph.ainvoke(
         {
-            "session_id": learning_session.id,
+            "session_id": session_id,
             "user_id": user_id,
             "scenario_id": "job_interview",
             "transcript": [],
             "turn_count": 0,
             "should_exit": False,
         },
-        config=config,
+        context=context,
     )
 
-    finished = await practice_service.get_session(learning_session.id, user_id)
+    session.expire_all()
+    finished = await practice_service.get_session(session_id, user_id)
     assert finished.status == SessionStatus.COMPLETED
     assert finished.ended_at is not None
     assert finished.transcript is not None and len(finished.transcript) > 0

@@ -2,10 +2,9 @@ import uuid
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from analysis.repository import SessionAnalysisRepositoryImpl
-from analysis.service import AnalysisService
+from orchestration.context import SessionRuntimeContext
 from orchestration.graph import build_session_graph
 from orchestration.schemas import SessionAnalysisResult
 from persona.repository import PersonaMemoryRepositoryImpl
@@ -13,8 +12,6 @@ from persona.service import PersonaService
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
-from weaknesses.repository import WeaknessRecordRepositoryImpl
-from weaknesses.service import WeaknessService
 
 
 class _FakeLLMClient:
@@ -55,40 +52,30 @@ async def user_id(session: AsyncSession) -> uuid.UUID:
 
 @pytest.mark.asyncio
 async def test_persona_memory_update_writes_real_facts(
-    session: AsyncSession, user_id: uuid.UUID
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
 ) -> None:
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
-    analysis_service = AnalysisService(
-        SessionAnalysisRepositoryImpl(session), LearningSessionRepositoryImpl(session)
-    )
-    weakness_service = WeaknessService(
-        WeaknessRecordRepositoryImpl(session), LearningSessionRepositoryImpl(session)
-    )
-    persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
 
     graph = build_session_graph()
-    config = {
-        "configurable": {
-            "briefing_llm": _FakeLLMClient("Hi, thanks for joining!"),
-            "conversing_llm": _FakeLLMClient("That's a great start — tell me more."),
-            "session_analysis_llm": _FakeStructuredLLMClient(
-                SessionAnalysisResult(
-                    grammar_findings=[],
-                    vocabulary_findings=[],
-                    fluency_findings={},
-                    task_completion={},
-                    focus_points=["Practice past-tense verbs"],
-                    skill_observations=[],
-                    new_facts=["User is preparing for a backend interview."],
-                )
-            ),
-            "analysis_service": analysis_service,
-            "weakness_service": weakness_service,
-            "persona_service": persona_service,
-            "practice_service": practice_service,
-        }
-    }
+    context = SessionRuntimeContext(
+        briefing_llm=_FakeLLMClient("Hi, thanks for joining!"),
+        conversing_llm=_FakeLLMClient("That's a great start — tell me more."),
+        session_analysis_llm=_FakeStructuredLLMClient(
+            SessionAnalysisResult(
+                grammar_findings=[],
+                vocabulary_findings=[],
+                fluency_findings={},
+                task_completion={},
+                focus_points=["Practice past-tense verbs"],
+                skill_observations=[],
+                new_facts=["User is preparing for a backend interview."],
+            )
+        ),
+        session_factory=session_factory,
+    )
 
     await graph.ainvoke(
         {
@@ -99,9 +86,10 @@ async def test_persona_memory_update_writes_real_facts(
             "turn_count": 0,
             "should_exit": False,
         },
-        config=config,
+        context=context,
     )
 
+    persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
     memory = await persona_service.get_memory(user_id, "job_interview")
     assert memory is not None
     assert memory.facts == ["User is preparing for a backend interview."]

@@ -2,6 +2,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from orchestration.context import SessionRuntimeContext
 from orchestration.nodes.briefing import briefing_node
 from orchestration.nodes.conversing import conversing_node
 from orchestration.nodes.finish_session import finish_session_node
@@ -19,7 +20,7 @@ def decide_exit(state: SessionState) -> str:
 def build_session_graph(
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
-    graph = StateGraph(SessionState)
+    graph = StateGraph(SessionState, context_schema=SessionRuntimeContext)
     graph.add_node("briefing", briefing_node)
     graph.add_node("conversing", conversing_node)
     graph.add_node("wrap_up", wrap_up_node)
