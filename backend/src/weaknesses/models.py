@@ -18,7 +18,6 @@ class WeaknessCategory(StrEnum):
 
 
 class WeaknessState(StrEnum):
-    NEW = "new"
     ACTIVE = "active"
     PROBATION = "probation"
     MASTERED = "mastered"
@@ -43,7 +42,7 @@ class WeaknessRecord(Base):
     category: Mapped[str] = mapped_column(String(20))
     skill_key: Mapped[str] = mapped_column(String(100))
     state: Mapped[str] = mapped_column(
-        String(20), default=WeaknessState.NEW, server_default=WeaknessState.NEW
+        String(20), default=WeaknessState.ACTIVE, server_default=WeaknessState.ACTIVE
     )
     clean_streak: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_session_id: Mapped[uuid.UUID | None] = mapped_column(

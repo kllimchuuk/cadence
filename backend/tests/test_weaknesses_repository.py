@@ -49,7 +49,7 @@ async def session_id(session: AsyncSession, user_id: uuid.UUID) -> uuid.UUID:
 
 
 @pytest.mark.asyncio
-async def test_a_new_weakness_starts_in_the_new_state_with_no_streak(
+async def test_a_new_weakness_starts_in_the_active_state_with_no_streak(
     session: AsyncSession,
     repository: WeaknessRecordRepository,
     user_id: uuid.UUID,
@@ -66,7 +66,7 @@ async def test_a_new_weakness_starts_in_the_new_state_with_no_streak(
 
     assert found is not None
     assert found.id == created.id
-    assert found.state == WeaknessState.NEW
+    assert found.state == WeaknessState.ACTIVE
     assert found.clean_streak == 0
 
 
@@ -93,7 +93,6 @@ async def test_only_active_and_probation_weaknesses_are_returned(
     user_id: uuid.UUID,
     session_id: uuid.UUID,
 ) -> None:
-    new_record = await repository.create(user_id, WeaknessCategory.GRAMMAR, "new_one")
     active_record = await repository.create(
         user_id, WeaknessCategory.VOCABULARY, "active_one"
     )
@@ -117,7 +116,6 @@ async def test_only_active_and_probation_weaknesses_are_returned(
     }
 
     assert found == {"active_one", "probation_one"}
-    assert new_record.skill_key not in found
     assert mastered_record.skill_key not in found
 
 

@@ -12,7 +12,6 @@ from weaknesses.repository import WeaknessRecordRepository, get_weakness_reposit
 _CLEAN_STREAK_TO_ADVANCE = 3
 
 _ADVANCE_ON_STREAK: dict[WeaknessState, WeaknessState] = {
-    WeaknessState.NEW: WeaknessState.PROBATION,
     WeaknessState.ACTIVE: WeaknessState.PROBATION,
     WeaknessState.PROBATION: WeaknessState.MASTERED,
 }

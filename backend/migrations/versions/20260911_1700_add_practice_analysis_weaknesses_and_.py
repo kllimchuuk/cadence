@@ -138,7 +138,9 @@ def upgrade() -> None:
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("category", sa.String(length=20), nullable=False),
         sa.Column("skill_key", sa.String(length=100), nullable=False),
-        sa.Column("state", sa.String(length=20), server_default="new", nullable=False),
+        sa.Column(
+            "state", sa.String(length=20), server_default="active", nullable=False
+        ),
         sa.Column("clean_streak", sa.Integer(), server_default="0", nullable=False),
         sa.Column("last_session_id", sa.UUID(), nullable=True),
         sa.Column(
@@ -158,7 +160,7 @@ def upgrade() -> None:
             name="ck_weakness_records_category",
         ),
         sa.CheckConstraint(
-            "state IN ('new', 'active', 'probation', 'mastered')",
+            "state IN ('active', 'probation', 'mastered')",
             name="ck_weakness_records_state",
         ),
         sa.ForeignKeyConstraint(
