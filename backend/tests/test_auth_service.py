@@ -10,7 +10,7 @@ from auth.exceptions import (
     NicknameAlreadyTakenError,
 )
 from auth.nickname import generate_unique_nickname
-from auth.repository import UserSessionRepository
+from auth.repository import UserSessionRepositoryImpl
 from auth.service import AuthService
 from core.security import hash_password, verify_password
 from users.repository import UserRepositoryImpl
@@ -18,7 +18,7 @@ from users.repository import UserRepositoryImpl
 
 @pytest.fixture
 def service(session: AsyncSession) -> AuthService:
-    return AuthService(UserRepositoryImpl(session), UserSessionRepository(session))
+    return AuthService(UserRepositoryImpl(session), UserSessionRepositoryImpl(session))
 
 
 @pytest.mark.asyncio
@@ -158,7 +158,7 @@ async def test_an_expired_session_does_not_authenticate(
     user, _ = await service.register(
         "learner@cadence.test", "a-strong-password", "Learner", "One", "learner"
     )
-    sessions = UserSessionRepository(session)
+    sessions = UserSessionRepositoryImpl(session)
     token, _ = await sessions.create(user.id, timedelta(days=-1))
 
     assert await service.authenticate(token) is None
@@ -171,7 +171,7 @@ async def test_authenticating_extends_the_session(
     user, token = await service.register(
         "learner@cadence.test", "a-strong-password", "Learner", "One", "learner"
     )
-    sessions = UserSessionRepository(session)
+    sessions = UserSessionRepositoryImpl(session)
     record = await sessions.get_by_token(token)
     record.expires_at = datetime.now(UTC) + timedelta(days=1)
 

@@ -1,5 +1,7 @@
 from starlette.status import (
+    HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
+    HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
@@ -26,3 +28,11 @@ class UnauthorizedError(AppException):
 
 class ConflictError(AppException):
     status_code = HTTP_409_CONFLICT
+
+
+class NotFoundError(AppException):
+    status_code = HTTP_404_NOT_FOUND
+
+
+class ValidationError(AppException):
+    status_code = HTTP_400_BAD_REQUEST

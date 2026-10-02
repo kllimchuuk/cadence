@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_SERVER_METADATA_URL: str
+    GEMINI_API_KEY: str
 
     @model_validator(mode="after")
     def _require_a_secret_key(self) -> "Settings":

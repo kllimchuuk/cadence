@@ -2,20 +2,25 @@ from typing import Annotated
 
 from authlib.integrations.starlette_client import StarletteOAuth2App
 from fastapi import Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.constants import SESSION_COOKIE_NAME
 from auth.exceptions import NotAuthenticatedError
-from auth.repository import UserSessionRepository
+from auth.repository import UserSessionRepository, get_user_session_repository
 from auth.service import AuthService
 from config import Settings
-from core.database import get_db
 from users.models import User
-from users.repository import UserRepositoryImpl
+from users.repository import UserRepository, get_user_repository
 
 
-def get_auth_service(session: Annotated[AsyncSession, Depends(get_db)]) -> AuthService:
-    return AuthService(UserRepositoryImpl(session), UserSessionRepository(session))
+def get_auth_service(
+    user_repository: Annotated[UserRepository, Depends(get_user_repository)],
+    session_repository: Annotated[
+        UserSessionRepository, Depends(get_user_session_repository)
+    ],
+) -> AuthService:
+    return AuthService(
+        user_repository=user_repository, session_repository=session_repository
+    )
 
 
 def get_google_oauth(request: Request) -> StarletteOAuth2App:

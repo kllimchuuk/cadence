@@ -13,6 +13,14 @@ from users.models import User, normalize_email
 
 class UserRepository(CRUDRepository[User, uuid.UUID], ABC):
     @abstractmethod
+    async def get_by_ids(self, ids: list[uuid.UUID]) -> list[User]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_all(self) -> list[User]:
+        raise NotImplementedError()
+
+    @abstractmethod
     async def get_by_email(self, email: str) -> User | None:
         raise NotImplementedError()
 
@@ -32,6 +40,14 @@ class UserRepository(CRUDRepository[User, uuid.UUID], ABC):
 class UserRepositoryImpl(CRUDRepositorySQLAlchemy[User, uuid.UUID], UserRepository):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, User)
+
+    async def get_by_ids(self, ids: list[uuid.UUID]) -> list[User]:
+        result = await self._session.execute(select(User).where(User.id.in_(ids)))
+        return list(result.scalars().all())
+
+    async def get_all(self) -> list[User]:
+        result = await self._session.execute(select(User))
+        return list(result.scalars().all())
 
     async def get_by_email(self, email: str) -> User | None:
         result = await self._session.execute(
