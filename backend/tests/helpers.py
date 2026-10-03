@@ -5,11 +5,12 @@ from typing import Any
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from langgraph.types import Command
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, make_url
 
 from core.database import build_engine
-from core.registry import metadata
+from core.registry import is_externally_managed_table, metadata
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -82,13 +83,38 @@ def table_names(url: str) -> list[str]:
     return asyncio.run(_read(url, lambda c: inspect(c).get_table_names()))
 
 
+def _include_object(object_, name, type_, reflected, compare_to) -> bool:
+    return not (type_ == "table" and is_externally_managed_table(name))
+
+
 def _diff(connection: Connection) -> list:
     context = MigrationContext.configure(
         connection,
-        opts={"compare_type": True, "compare_server_default": True},
+        opts={
+            "compare_type": True,
+            "compare_server_default": True,
+            "include_object": _include_object,
+        },
     )
     return compare_metadata(context, metadata)
 
 
 def schema_diff(url: str) -> list:
     return asyncio.run(_read(url, _diff))
+
+
+async def run_graph_to_completion(
+    graph: Any,
+    initial_state: dict[str, Any],
+    context: Any,
+    config: dict[str, Any],
+    user_turns: list[str],
+) -> dict[str, Any]:
+    result = await graph.ainvoke(initial_state, context=context, config=config)
+    for turn in user_turns:
+        if "__interrupt__" not in result:
+            break
+        result = await graph.ainvoke(
+            Command(resume=turn), context=context, config=config
+        )
+    return result

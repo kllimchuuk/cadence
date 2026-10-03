@@ -1,12 +1,12 @@
 from collections.abc import AsyncIterator
 
-from fastapi import Request
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from starlette.requests import HTTPConnection
 
 UTC_SERVER_SETTINGS = {"timezone": "UTC"}
 
@@ -28,8 +28,18 @@ def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessio
     )
 
 
-async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
-    async with request.app.state.session_factory() as session:
+def psycopg_dsn(database_url: str) -> str:
+    return database_url.replace("postgresql+asyncpg://", "postgresql://")
+
+
+def get_session_factory(
+    conn: HTTPConnection,
+) -> async_sessionmaker[AsyncSession]:
+    return conn.app.state.session_factory
+
+
+async def get_db(conn: HTTPConnection) -> AsyncIterator[AsyncSession]:
+    async with conn.app.state.session_factory() as session:
         try:
             yield session
             await session.commit()

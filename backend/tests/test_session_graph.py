@@ -2,20 +2,32 @@ import uuid
 
 import pytest
 import pytest_asyncio
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import GraphRecursionError
+from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from llm.exceptions import LLMResponseError
 from orchestration.context import SessionRuntimeContext
-from orchestration.graph import build_session_graph, recursion_limit_for_session
+from orchestration.graph import build_session_graph, recursion_limit_for_turn
 from orchestration.nodes import conversing as conversing_node_module
 from orchestration.schemas import SessionAnalysisResult, SkillObservation
+from orchestration.state import SessionState, initial_session_state
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from scenarios.config import get_scenario
 from users.repository import UserRepositoryImpl
+
+from tests.helpers import run_graph_to_completion
+
+
+def _thread_config(recursion_limit: int | None = None) -> dict[str, object]:
+    config: dict[str, object] = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    if recursion_limit is not None:
+        config["recursion_limit"] = recursion_limit
+    return config
 
 
 class _FakeLLMClient:
@@ -109,15 +121,8 @@ def _context(
     )
 
 
-def _initial_state(session_id: uuid.UUID, user_id: uuid.UUID) -> dict[str, object]:
-    return {
-        "session_id": session_id,
-        "user_id": user_id,
-        "scenario_id": "job_interview",
-        "transcript": [],
-        "turn_count": 0,
-        "should_exit": False,
-    }
+def _initial_state(session_id: uuid.UUID, user_id: uuid.UUID) -> SessionState:
+    return initial_session_state(session_id, user_id, "job_interview")
 
 
 @pytest.mark.asyncio
@@ -125,17 +130,23 @@ async def test_conversing_loops_until_should_exit_then_wraps_up(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(conversing_node_module, "MAX_CONVERSATION_TURNS", 2)
+
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
 
-    graph = build_session_graph()
+    graph = build_session_graph(checkpointer=InMemorySaver())
     briefing_llm = _FakeLLMClient("Hi, thanks for joining!")
     conversing_llm = _FakeLLMClient("That's a great start — tell me more.")
 
-    result = await graph.ainvoke(
+    result = await run_graph_to_completion(
+        graph,
         _initial_state(learning_session.id, user_id),
-        context=_context(session_factory, briefing_llm, conversing_llm),
+        _context(session_factory, briefing_llm, conversing_llm),
+        _thread_config(),
+        user_turns=["Sure.", "Got it."],
     )
 
     assert [entry["role"] for entry in result["transcript"]] == [
@@ -159,13 +170,16 @@ async def test_conversing_uses_the_injected_llm_reply_not_a_hardcoded_one(
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
 
-    graph = build_session_graph()
+    graph = build_session_graph(checkpointer=InMemorySaver())
     briefing_llm = _FakeLLMClient("injected briefing line")
     conversing_llm = _FakeLLMClient("injected conversing reply")
 
-    result = await graph.ainvoke(
+    result = await run_graph_to_completion(
+        graph,
         _initial_state(learning_session.id, user_id),
-        context=_context(session_factory, briefing_llm, conversing_llm),
+        _context(session_factory, briefing_llm, conversing_llm),
+        _thread_config(),
+        user_turns=["Hi there."],
     )
 
     assert result["transcript"][0] == {
@@ -186,18 +200,24 @@ async def test_session_analysis_forwards_its_findings_to_downstream_nodes(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(conversing_node_module, "MAX_CONVERSATION_TURNS", 1)
+
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
 
-    graph = build_session_graph()
-    result = await graph.ainvoke(
+    graph = build_session_graph(checkpointer=InMemorySaver())
+    result = await run_graph_to_completion(
+        graph,
         _initial_state(learning_session.id, user_id),
-        context=_context(
+        _context(
             session_factory,
             _FakeLLMClient("hi"),
             _FakeLLMClient("hi"),
         ),
+        _thread_config(),
+        user_turns=["Sure."],
     )
 
     assert result["skill_observations"] == [
@@ -216,7 +236,10 @@ async def test_persona_memory_update_skips_the_service_when_there_are_no_new_fac
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(conversing_node_module, "MAX_CONVERSATION_TURNS", 1)
+
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
     analysis_result = SessionAnalysisResult(
@@ -229,15 +252,18 @@ async def test_persona_memory_update_skips_the_service_when_there_are_no_new_fac
         new_facts=[],
     )
 
-    graph = build_session_graph()
-    await graph.ainvoke(
+    graph = build_session_graph(checkpointer=InMemorySaver())
+    await run_graph_to_completion(
+        graph,
         _initial_state(learning_session.id, user_id),
-        context=_context(
+        _context(
             session_factory,
             _FakeLLMClient("hi"),
             _FakeLLMClient("hi"),
             analysis_result=analysis_result,
         ),
+        _thread_config(),
+        user_turns=["Sure."],
     )
 
     persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
@@ -259,13 +285,16 @@ async def test_briefing_and_conversing_prompts_include_remembered_persona_facts(
         user_id, "job_interview", ["User is preparing for a backend interview."]
     )
 
-    graph = build_session_graph()
+    graph = build_session_graph(checkpointer=InMemorySaver())
     briefing_llm = _FakeLLMClient("Hi again!")
     conversing_llm = _FakeLLMClient("Great, let's continue.")
 
-    await graph.ainvoke(
+    await run_graph_to_completion(
+        graph,
         _initial_state(learning_session.id, user_id),
-        context=_context(session_factory, briefing_llm, conversing_llm),
+        _context(session_factory, briefing_llm, conversing_llm),
+        _thread_config(),
+        user_turns=["Hi!"],
     )
 
     assert briefing_llm.received_prompts
@@ -284,7 +313,10 @@ async def test_session_analysis_prompt_includes_the_scenarios_goal_checklist(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(conversing_node_module, "MAX_CONVERSATION_TURNS", 1)
+
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
     scenario = get_scenario("job_interview")
@@ -297,10 +329,13 @@ async def test_session_analysis_prompt_includes_the_scenarios_goal_checklist(
         session_factory=session_factory,
     )
 
-    graph = build_session_graph()
-    await graph.ainvoke(
+    graph = build_session_graph(checkpointer=InMemorySaver())
+    await run_graph_to_completion(
+        graph,
         _initial_state(learning_session.id, user_id),
-        context=context,
+        context,
+        _thread_config(),
+        user_turns=["Sure."],
     )
 
     assert session_analysis_llm.received_prompts
@@ -318,13 +353,14 @@ async def test_briefing_recovers_from_a_transient_llm_failure(
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
 
-    graph = build_session_graph()
+    graph = build_session_graph(checkpointer=InMemorySaver())
     briefing_llm = _FlakyLLMClient("Hi, thanks for joining!", fail_times=2)
     conversing_llm = _FakeLLMClient("continuing")
 
     result = await graph.ainvoke(
         _initial_state(learning_session.id, user_id),
         context=_context(session_factory, briefing_llm, conversing_llm),
+        config=_thread_config(),
     )
 
     assert briefing_llm.call_count == 3
@@ -343,44 +379,59 @@ async def test_briefing_gives_up_after_exhausting_retries(
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
 
-    graph = build_session_graph()
+    graph = build_session_graph(checkpointer=InMemorySaver())
     briefing_llm = _FlakyLLMClient("never used", fail_times=99)
 
     with pytest.raises(LLMResponseError):
         await graph.ainvoke(
             _initial_state(learning_session.id, user_id),
             context=_context(session_factory, briefing_llm, _FakeLLMClient("hi")),
+            config=_thread_config(),
         )
 
     assert briefing_llm.call_count == 3
 
 
 @pytest.mark.asyncio
-async def test_recursion_limit_for_session_is_enough_for_a_full_run(
+async def test_recursion_limit_for_turn_is_enough_for_the_final_turns_exit_cascade(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(conversing_node_module, "MAX_CONVERSATION_TURNS", 20)
+    monkeypatch.setattr(conversing_node_module, "MAX_CONVERSATION_TURNS", 1)
 
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
-    learning_session = await practice_service.start_session(user_id, "job_interview")
-    context = _context(session_factory, _FakeLLMClient("hi"), _FakeLLMClient("hi"))
-    graph = build_session_graph()
+    checkpointer = InMemorySaver()
 
+    too_low_session = await practice_service.start_session(user_id, "job_interview")
+    too_low_context = _context(
+        session_factory, _FakeLLMClient("hi"), _FakeLLMClient("hi")
+    )
+    too_low_graph = build_session_graph(checkpointer=checkpointer)
+    too_low_config = _thread_config(recursion_limit=2)
+
+    await too_low_graph.ainvoke(
+        _initial_state(too_low_session.id, user_id),
+        context=too_low_context,
+        config=too_low_config,
+    )
     with pytest.raises(GraphRecursionError):
-        await graph.ainvoke(
-            _initial_state(learning_session.id, user_id),
-            context=context,
-            config={"recursion_limit": 10},
+        await too_low_graph.ainvoke(
+            Command(resume="Sure."), context=too_low_context, config=too_low_config
         )
 
-    result = await graph.ainvoke(
-        _initial_state(learning_session.id, user_id),
-        context=context,
-        config={"recursion_limit": recursion_limit_for_session()},
+    full_session = await practice_service.start_session(user_id, "job_interview")
+    full_context = _context(session_factory, _FakeLLMClient("hi"), _FakeLLMClient("hi"))
+    full_graph = build_session_graph(checkpointer=checkpointer)
+
+    result = await run_graph_to_completion(
+        full_graph,
+        _initial_state(full_session.id, user_id),
+        full_context,
+        _thread_config(recursion_limit=recursion_limit_for_turn()),
+        user_turns=["Sure."],
     )
 
-    assert result["turn_count"] == 20
+    assert result["turn_count"] == 1
     assert result["should_exit"] is True

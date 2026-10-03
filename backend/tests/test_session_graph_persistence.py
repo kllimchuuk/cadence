@@ -1,16 +1,21 @@
+import asyncio
 import uuid
 
 import pytest
+from alembic import command
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from sqlalchemy.engine import make_url
 
-from core.database import build_engine, build_session_factory
+from core.database import build_engine, build_session_factory, psycopg_dsn
 from orchestration.context import SessionRuntimeContext
-from orchestration.graph import build_session_graph, recursion_limit_for_session
+from orchestration.graph import build_session_graph, recursion_limit_for_turn
+from orchestration.nodes.conversing import MAX_CONVERSATION_TURNS
 from orchestration.schemas import SessionAnalysisResult
+from orchestration.state import initial_session_state
 from practice.models import SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from users.repository import UserRepositoryImpl
+
+from tests.helpers import alembic_config, run_graph_to_completion
 
 
 class _FakeLLMClient:
@@ -42,22 +47,16 @@ class _FakeStructuredLLMClient:
         )
 
 
-def _psycopg_dsn(database_url: str) -> str:
-    return (
-        make_url(database_url)
-        .set(drivername="postgresql")
-        .render_as_string(hide_password=False)
-    )
-
-
 @pytest.mark.asyncio
 async def test_a_finished_session_is_readable_from_a_fresh_checkpointer(
-    migrated_schema: str,
+    throwaway_database: str,
 ) -> None:
-    dsn = _psycopg_dsn(migrated_schema)
+    await asyncio.to_thread(command.upgrade, alembic_config(throwaway_database), "head")
+
+    dsn = psycopg_dsn(throwaway_database)
     thread_id = str(uuid.uuid4())
 
-    engine = build_engine(migrated_schema)
+    engine = build_engine(throwaway_database)
     session_factory = build_session_factory(engine)
     try:
         async with session_factory() as setup_session:
@@ -80,25 +79,22 @@ async def test_a_finished_session_is_readable_from_a_fresh_checkpointer(
                 session_analysis_llm=_FakeStructuredLLMClient(),
                 session_factory=session_factory,
             )
-            initial_state = {
-                "session_id": learning_session.id,
-                "user_id": user.id,
-                "scenario_id": "job_interview",
-                "transcript": [],
-                "turn_count": 0,
-                "should_exit": False,
-            }
+            initial_state = initial_session_state(
+                learning_session.id, user.id, "job_interview"
+            )
 
             async with AsyncPostgresSaver.from_conn_string(dsn) as checkpointer:
                 await checkpointer.setup()
                 graph = build_session_graph(checkpointer=checkpointer)
-                invoked_result = await graph.ainvoke(
+                invoked_result = await run_graph_to_completion(
+                    graph,
                     initial_state,
-                    context=context,
+                    context,
                     config={
                         "configurable": {"thread_id": thread_id},
-                        "recursion_limit": recursion_limit_for_session(),
+                        "recursion_limit": recursion_limit_for_turn(),
                     },
+                    user_turns=["Sounds good." for _ in range(MAX_CONVERSATION_TURNS)],
                 )
 
             async with AsyncPostgresSaver.from_conn_string(

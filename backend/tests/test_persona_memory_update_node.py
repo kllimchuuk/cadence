@@ -2,16 +2,21 @@ import uuid
 
 import pytest
 import pytest_asyncio
+from langgraph.checkpoint.memory import InMemorySaver
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from orchestration.context import SessionRuntimeContext
 from orchestration.graph import build_session_graph
+from orchestration.nodes import conversing as conversing_node_module
 from orchestration.schemas import SessionAnalysisResult
+from orchestration.state import initial_session_state
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
+
+from tests.helpers import run_graph_to_completion
 
 
 class _FakeLLMClient:
@@ -55,11 +60,14 @@ async def test_persona_memory_update_writes_real_facts(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(conversing_node_module, "MAX_CONVERSATION_TURNS", 1)
+
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
 
-    graph = build_session_graph()
+    graph = build_session_graph(checkpointer=InMemorySaver())
     context = SessionRuntimeContext(
         briefing_llm=_FakeLLMClient("Hi, thanks for joining!"),
         conversing_llm=_FakeLLMClient("That's a great start — tell me more."),
@@ -77,16 +85,12 @@ async def test_persona_memory_update_writes_real_facts(
         session_factory=session_factory,
     )
 
-    await graph.ainvoke(
-        {
-            "session_id": learning_session.id,
-            "user_id": user_id,
-            "scenario_id": "job_interview",
-            "transcript": [],
-            "turn_count": 0,
-            "should_exit": False,
-        },
-        context=context,
+    await run_graph_to_completion(
+        graph,
+        initial_session_state(learning_session.id, user_id, "job_interview"),
+        context,
+        {"configurable": {"thread_id": str(uuid.uuid4())}},
+        user_turns=["Sure."],
     )
 
     persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
