@@ -6,22 +6,38 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
 from starlette.middleware.sessions import SessionMiddleware
 
 from auth.oauth import build_google_oauth
 from auth.router import router as auth_router
 from config import Settings, settings
-from core.database import build_engine, build_session_factory
+from core.database import build_engine, build_session_factory, psycopg_dsn
 from core.exceptions import AppException
 from llm.factory import LLMClientFactory
+from practice.router import router as practice_router
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    pool = AsyncConnectionPool(
+        conninfo=psycopg_dsn(app.state.settings.DATABASE_URL),
+        max_size=10,
+        open=False,
+        kwargs={"autocommit": True},
+    )
+    await pool.open()
+    checkpointer = AsyncPostgresSaver(pool)
+    await checkpointer.setup()
+    app.state.checkpointer = checkpointer
+
     yield
+
     await app.state.db_engine.dispose()
+    await pool.close()
 
 
 async def domain_exception_handler(
@@ -80,6 +96,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(auth_router)
+    app.include_router(practice_router)
 
     return app
 
