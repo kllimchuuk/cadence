@@ -2,6 +2,7 @@ from typing import Annotated
 
 from authlib.integrations.starlette_client import StarletteOAuth2App
 from fastapi import Depends, Request
+from starlette.requests import HTTPConnection
 
 from auth.constants import SESSION_COOKIE_NAME
 from auth.exceptions import NotAuthenticatedError
@@ -31,13 +32,17 @@ def get_settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
-async def get_current_user(
-    request: Request,
+async def get_optional_current_user(
+    conn: HTTPConnection,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> User:
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    user = await auth_service.authenticate(token) if token else None
+) -> User | None:
+    token = conn.cookies.get(SESSION_COOKIE_NAME)
+    return await auth_service.authenticate(token) if token else None
 
+
+async def get_current_user(
+    user: Annotated[User | None, Depends(get_optional_current_user)],
+) -> User:
     if user is None:
         raise NotAuthenticatedError()
 
