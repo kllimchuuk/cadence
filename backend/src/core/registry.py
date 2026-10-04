@@ -14,13 +14,6 @@ __all__ = [
     "User",
     "UserSession",
     "WeaknessRecord",
-    "is_externally_managed_table",
 ]
 
 metadata = Base.metadata
-
-_EXTERNALLY_MANAGED_TABLE_PREFIXES = ("checkpoint",)
-
-
-def is_externally_managed_table(name: str | None) -> bool:
-    return name is not None and name.startswith(_EXTERNALLY_MANAGED_TABLE_PREFIXES)

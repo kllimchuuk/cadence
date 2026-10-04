@@ -10,7 +10,8 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, make_url
 
 from core.database import build_engine
-from core.registry import is_externally_managed_table, metadata
+from core.external_tables import is_externally_managed_table
+from core.registry import metadata
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 

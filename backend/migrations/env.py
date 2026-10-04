@@ -7,7 +7,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from config import settings
-from core.registry import is_externally_managed_table, metadata
+from core.external_tables import is_externally_managed_table
+from core.registry import metadata
 
 config = context.config
 
