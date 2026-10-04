@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 
+from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -29,7 +30,11 @@ def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessio
 
 
 def psycopg_dsn(database_url: str) -> str:
-    return database_url.replace("postgresql+asyncpg://", "postgresql://")
+    return (
+        make_url(database_url)
+        .set(drivername="postgresql")
+        .render_as_string(hide_password=False)
+    )
 
 
 def get_session_factory(
@@ -39,7 +44,7 @@ def get_session_factory(
 
 
 async def get_db(conn: HTTPConnection) -> AsyncIterator[AsyncSession]:
-    async with conn.app.state.session_factory() as session:
+    async with get_session_factory(conn)() as session:
         try:
             yield session
             await session.commit()
