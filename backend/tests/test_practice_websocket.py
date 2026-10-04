@@ -1,4 +1,5 @@
 import asyncio
+import time
 import uuid
 from collections.abc import Iterator
 
@@ -12,13 +13,20 @@ from llm.dependencies import get_llm_client_factory
 from main import create_app
 from orchestration.nodes import conversing as conversing_node_module
 from orchestration.schemas import SessionAnalysisResult
+from practice import websocket as websocket_module
 from practice.models import LearningSession, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from practice.websocket import (
+    FORBIDDEN_ORIGIN_CLOSE_CODE,
+    IDLE_TIMEOUT_CLOSE_CODE,
+    INTERNAL_ERROR_CLOSE_CODE,
     INVALID_REQUEST_CLOSE_CODE,
     UNAUTHENTICATED_CLOSE_CODE,
 )
 from tests.helpers import settings_kwargs
+
+STATUS_POLL_TIMEOUT_SECONDS = 3
+STATUS_POLL_INTERVAL_SECONDS = 0.05
 
 
 def unique_email() -> str:
@@ -64,6 +72,16 @@ class _FakeLLMClientFactory:
         return _FakeDualClient(self._reply, self._analysis_result)
 
 
+class _FailingLLMClient:
+    async def generate(self, _prompt: str) -> str:
+        raise RuntimeError("the model is unavailable")
+
+
+class _FailingLLMClientFactory:
+    def create(self, _model: str) -> _FailingLLMClient:
+        return _FailingLLMClient()
+
+
 def _default_analysis_result() -> SessionAnalysisResult:
     return SessionAnalysisResult(
         grammar_findings=[],
@@ -92,6 +110,22 @@ def _fetch_session(
     return asyncio.run(query())
 
 
+def _wait_for_status(
+    database_url: str,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+    status: SessionStatus,
+) -> LearningSession | None:
+    deadline = time.monotonic() + STATUS_POLL_TIMEOUT_SECONDS
+    record = _fetch_session(database_url, session_id, user_id)
+    while record is not None and record.status != status:
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(STATUS_POLL_INTERVAL_SECONDS)
+        record = _fetch_session(database_url, session_id, user_id)
+    return record
+
+
 @pytest.fixture
 def client(migrated_schema: str) -> Iterator[TestClient]:
     settings = Settings(
@@ -108,23 +142,48 @@ def client(migrated_schema: str) -> Iterator[TestClient]:
 
 
 def test_connecting_without_a_session_cookie_is_rejected(client: TestClient) -> None:
-    with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect(
-            "/practice/sessions/ws?scenario_id=job_interview"
-        ):
-            pass
+    with client.websocket_connect(
+        "/practice/sessions/ws?scenario_id=job_interview"
+    ) as ws:
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            ws.receive_json()
 
     assert exc_info.value.code == UNAUTHENTICATED_CLOSE_CODE
+
+
+def test_connecting_from_a_foreign_origin_is_rejected(client: TestClient) -> None:
+    client.post("/auth/register", json=register_payload())
+
+    with client.websocket_connect(
+        "/practice/sessions/ws?scenario_id=job_interview",
+        headers={"origin": "https://evil.example"},
+    ) as ws:
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            ws.receive_json()
+
+    assert exc_info.value.code == FORBIDDEN_ORIGIN_CLOSE_CODE
+
+
+def test_connecting_from_an_allowed_origin_starts_the_session(
+    client: TestClient,
+) -> None:
+    client.post("/auth/register", json=register_payload())
+
+    with client.websocket_connect(
+        "/practice/sessions/ws?scenario_id=job_interview",
+        headers={"origin": "http://localhost:5173"},
+    ) as ws:
+        assert ws.receive_json()["type"] == "session_started"
 
 
 def test_connecting_with_an_unknown_scenario_is_rejected(client: TestClient) -> None:
     client.post("/auth/register", json=register_payload())
 
-    with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect(
-            "/practice/sessions/ws?scenario_id=not-a-scenario"
-        ):
-            pass
+    with client.websocket_connect(
+        "/practice/sessions/ws?scenario_id=not-a-scenario"
+    ) as ws:
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            ws.receive_json()
 
     assert exc_info.value.code == INVALID_REQUEST_CLOSE_CODE
 
@@ -145,6 +204,49 @@ def test_a_malformed_frame_closes_the_socket_as_a_bad_request(
             ws.receive_json()
 
     assert exc_info.value.code == INVALID_REQUEST_CLOSE_CODE
+
+
+def test_an_internal_failure_closes_the_socket_and_abandons_the_session(
+    client: TestClient,
+    migrated_schema: str,
+) -> None:
+    client.app.dependency_overrides[get_llm_client_factory] = (
+        lambda: _FailingLLMClientFactory()
+    )
+    register_response = client.post("/auth/register", json=register_payload())
+    user_id = uuid.UUID(register_response.json()["id"])
+
+    with client.websocket_connect(
+        "/practice/sessions/ws?scenario_id=job_interview"
+    ) as ws:
+        session_id = uuid.UUID(ws.receive_json()["session_id"])
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            ws.receive_json()
+
+    assert exc_info.value.code == INTERNAL_ERROR_CLOSE_CODE
+    abandoned = _wait_for_status(
+        migrated_schema, session_id, user_id, SessionStatus.INCOMPLETE
+    )
+    assert abandoned is not None
+    assert abandoned.status == SessionStatus.INCOMPLETE
+
+
+def test_an_idle_connection_is_closed_with_a_timeout_code(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(websocket_module, "IDLE_TIMEOUT_SECONDS", 0.05)
+    client.post("/auth/register", json=register_payload())
+
+    with client.websocket_connect(
+        "/practice/sessions/ws?scenario_id=job_interview"
+    ) as ws:
+        ws.receive_json()
+        ws.receive_json()
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            ws.receive_json()
+
+    assert exc_info.value.code == IDLE_TIMEOUT_CLOSE_CODE
 
 
 def test_a_full_conversation_completes_with_focus_points(
@@ -184,7 +286,7 @@ def test_a_full_conversation_completes_with_focus_points(
     assert finished.status == SessionStatus.COMPLETED
 
 
-def test_disconnecting_mid_conversation_leaves_the_session_in_progress(
+def test_disconnecting_mid_conversation_marks_the_session_incomplete(
     client: TestClient,
     migrated_schema: str,
 ) -> None:
@@ -198,6 +300,10 @@ def test_disconnecting_mid_conversation_leaves_the_session_in_progress(
         session_id = uuid.UUID(started["session_id"])
         ws.receive_json()
 
-    in_progress = _fetch_session(migrated_schema, session_id, user_id)
-    assert in_progress is not None
-    assert in_progress.status == SessionStatus.IN_PROGRESS
+    abandoned = _wait_for_status(
+        migrated_schema, session_id, user_id, SessionStatus.INCOMPLETE
+    )
+    assert abandoned is not None
+    assert abandoned.status == SessionStatus.INCOMPLETE
+    assert abandoned.transcript is not None
+    assert abandoned.transcript[0]["role"] == "assistant"

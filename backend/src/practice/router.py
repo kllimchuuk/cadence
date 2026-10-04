@@ -2,7 +2,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket
 
-from auth.dependencies import get_optional_current_user
+from auth.dependencies import get_optional_current_user, get_settings
+from config import Settings
 from orchestration.dependencies import get_session_runner
 from orchestration.session_runner import SessionRunner
 from practice.websocket import PracticeSessionSocket
@@ -17,5 +18,8 @@ async def practice_session_ws(
     scenario_id: str,
     user: Annotated[User | None, Depends(get_optional_current_user)],
     runner: Annotated[SessionRunner, Depends(get_session_runner)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
-    await PracticeSessionSocket(websocket, runner).run(user, scenario_id)
+    await PracticeSessionSocket(websocket, runner, settings.cors_origins).run(
+        user, scenario_id
+    )
