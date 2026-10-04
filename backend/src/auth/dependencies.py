@@ -28,8 +28,8 @@ def get_google_oauth(request: Request) -> StarletteOAuth2App:
     return request.app.state.oauth.google
 
 
-def get_settings(request: Request) -> Settings:
-    return request.app.state.settings
+def get_settings(conn: HTTPConnection) -> Settings:
+    return conn.app.state.settings
 
 
 async def get_optional_current_user(
