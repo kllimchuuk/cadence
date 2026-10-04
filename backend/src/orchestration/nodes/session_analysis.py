@@ -36,7 +36,7 @@ async def session_analysis_node(
             SessionAnalysisRepositoryImpl(session),
             LearningSessionRepositoryImpl(session),
         )
-        await analysis_service.create_analysis(
+        analysis = await analysis_service.create_analysis(
             session_id=state["session_id"],
             user_id=state["user_id"],
             grammar_findings=result.grammar_findings,
@@ -52,4 +52,5 @@ async def session_analysis_node(
             observation.model_dump() for observation in result.skill_observations
         ],
         "persona_facts": result.new_facts,
+        "focus_points": [str(point) for point in analysis.focus_points],
     }

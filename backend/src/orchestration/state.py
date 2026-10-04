@@ -12,6 +12,7 @@ class SessionState(TypedDict):
     should_exit: bool
     skill_observations: list[dict[str, str]]
     persona_facts: list[str]
+    focus_points: list[str]
 
 
 def initial_session_state(
@@ -26,4 +27,5 @@ def initial_session_state(
         should_exit=False,
         skill_observations=[],
         persona_facts=[],
+        focus_points=[],
     )
