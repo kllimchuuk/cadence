@@ -16,6 +16,7 @@ from config import Settings, settings
 from core.database import build_engine, build_session_factory, psycopg_dsn
 from core.exceptions import AppException
 from llm.factory import LLMClientFactory
+from orchestration.graph import build_session_graph
 from practice.router import router as practice_router
 
 logger = logging.getLogger(__name__)
@@ -23,21 +24,20 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    pool = AsyncConnectionPool(
-        conninfo=psycopg_dsn(app.state.settings.DATABASE_URL),
-        max_size=10,
-        open=False,
-        kwargs={"autocommit": True},
-    )
-    await pool.open()
-    checkpointer = AsyncPostgresSaver(pool)
-    await checkpointer.setup()
-    app.state.checkpointer = checkpointer
-
-    yield
-
-    await app.state.db_engine.dispose()
-    await pool.close()
+    app_settings = app.state.settings
+    try:
+        async with AsyncConnectionPool(
+            conninfo=psycopg_dsn(app_settings.DATABASE_URL),
+            max_size=app_settings.CHECKPOINTER_POOL_MAX_SIZE,
+            open=False,
+            kwargs={"autocommit": True},
+        ) as pool:
+            checkpointer = AsyncPostgresSaver(pool)
+            await checkpointer.setup()
+            app.state.session_graph = build_session_graph(checkpointer=checkpointer)
+            yield
+    finally:
+        await app.state.db_engine.dispose()
 
 
 async def domain_exception_handler(

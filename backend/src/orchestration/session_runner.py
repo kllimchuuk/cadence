@@ -1,16 +1,15 @@
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
-from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from analysis.repository import SessionAnalysisRepositoryImpl
-from analysis.service import AnalysisService
 from orchestration.context import SessionRuntimeContext
-from orchestration.graph import build_session_graph, recursion_limit_for_turn
+from orchestration.graph import recursion_limit_for_turn
 from orchestration.state import initial_session_state
-from practice.models import LearningSession
+from practice.models import LearningSession, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 
@@ -30,12 +29,11 @@ class SessionRunner:
         self,
         session_factory: async_sessionmaker[AsyncSession],
         runtime_context: SessionRuntimeContext,
-        checkpointer: BaseCheckpointSaver,
+        graph: CompiledStateGraph,
     ) -> None:
         self._session_factory = session_factory
         self._runtime_context = runtime_context
-        self._graph = build_session_graph(checkpointer=checkpointer)
-        self._delivered_entries = 0
+        self._graph = graph
 
     async def create_session(
         self, user_id: uuid.UUID, scenario_id: str
@@ -49,26 +47,48 @@ class SessionRunner:
             return learning_session
 
     async def open_conversation(self, learning_session: LearningSession) -> SessionTurn:
-        result = await self._graph.ainvoke(
+        return await self._advance(
+            learning_session,
             initial_session_state(
                 learning_session.id,
                 learning_session.user_id,
                 learning_session.scenario_id,
             ),
-            context=self._runtime_context,
-            config=self._config(learning_session),
         )
-        return await self._turn_from(learning_session, result)
 
     async def submit_turn(
         self, learning_session: LearningSession, user_turn: str
     ) -> SessionTurn:
+        return await self._advance(learning_session, Command(resume=user_turn))
+
+    async def abandon_session(self, learning_session: LearningSession) -> None:
+        transcript = await self._checkpointed_transcript(learning_session)
+        async with self._session_factory() as session:
+            practice_service = PracticeService(LearningSessionRepositoryImpl(session))
+            await practice_service.finish_session(
+                learning_session.id,
+                learning_session.user_id,
+                SessionStatus.INCOMPLETE,
+                transcript,
+            )
+            await session.commit()
+
+    async def _advance(
+        self, learning_session: LearningSession, graph_input: Any
+    ) -> SessionTurn:
+        delivered_entries = len(await self._checkpointed_transcript(learning_session))
         result = await self._graph.ainvoke(
-            Command(resume=user_turn),
+            graph_input,
             context=self._runtime_context,
             config=self._config(learning_session),
         )
-        return await self._turn_from(learning_session, result)
+        return self._turn_from(result, delivered_entries)
+
+    async def _checkpointed_transcript(
+        self, learning_session: LearningSession
+    ) -> list[dict[str, str]]:
+        snapshot = await self._graph.aget_state(self._config(learning_session))
+        return snapshot.values.get("transcript", [])
 
     @staticmethod
     def _config(learning_session: LearningSession) -> dict[str, object]:
@@ -77,13 +97,9 @@ class SessionRunner:
             "recursion_limit": recursion_limit_for_turn(),
         }
 
-    async def _turn_from(
-        self, learning_session: LearningSession, result: dict
-    ) -> SessionTurn:
-        transcript = result["transcript"]
-        new_entries = transcript[self._delivered_entries :]
-        self._delivered_entries = len(transcript)
-
+    @staticmethod
+    def _turn_from(result: dict[str, Any], delivered_entries: int) -> SessionTurn:
+        new_entries = result["transcript"][delivered_entries:]
         awaiting_user = _INTERRUPT_KEY in result
         return SessionTurn(
             assistant_messages=tuple(
@@ -92,18 +108,5 @@ class SessionRunner:
                 if entry["role"] == _ASSISTANT_ROLE
             ),
             awaiting_user=awaiting_user,
-            focus_points=(
-                () if awaiting_user else await self._focus_points(learning_session)
-            ),
+            focus_points=tuple(result["focus_points"]),
         )
-
-    async def _focus_points(self, learning_session: LearningSession) -> tuple[str, ...]:
-        async with self._session_factory() as session:
-            analysis_service = AnalysisService(
-                SessionAnalysisRepositoryImpl(session),
-                LearningSessionRepositoryImpl(session),
-            )
-            analysis = await analysis_service.get_analysis(
-                learning_session.id, learning_session.user_id
-            )
-        return tuple(analysis.focus_points) if analysis else ()
