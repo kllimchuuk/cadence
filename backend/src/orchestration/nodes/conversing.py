@@ -21,6 +21,7 @@ def _build_prompt(
 async def conversing_node(
     state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
 ) -> dict[str, object]:
+    user_turn = interrupt({"awaiting": "user_turn"})
     scenario = get_scenario(state["scenario_id"])
 
     async with runtime.context.session_factory() as session:
@@ -30,7 +31,6 @@ async def conversing_node(
         )
 
     system_prompt = build_persona_system_prompt(scenario, persona_memory)
-    user_turn = interrupt({"awaiting": "user_turn"})
     prompt = _build_prompt(system_prompt, state["transcript"], user_turn)
     assistant_reply = await runtime.context.conversing_llm.generate(prompt)
 
