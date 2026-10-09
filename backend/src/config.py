@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_SERVER_METADATA_URL: str
     GEMINI_API_KEY: str
-    GEMINI_FLASH_MODEL: str = "gemini-flash-latest"
+    GEMINI_MODEL: str
     CHECKPOINTER_POOL_MAX_SIZE: int = 10
 
     @model_validator(mode="after")

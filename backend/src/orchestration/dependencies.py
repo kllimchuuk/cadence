@@ -26,9 +26,9 @@ def get_session_runtime_context(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SessionRuntimeContext:
     return SessionRuntimeContext(
-        briefing_llm=llm_factory.create(settings.GEMINI_FLASH_MODEL),
-        conversing_llm=llm_factory.create(settings.GEMINI_FLASH_MODEL),
-        session_analysis_llm=llm_factory.create(settings.GEMINI_FLASH_MODEL),
+        briefing_llm=llm_factory.create(settings.GEMINI_MODEL),
+        conversing_llm=llm_factory.create(settings.GEMINI_MODEL),
+        session_analysis_llm=llm_factory.create(settings.GEMINI_MODEL),
         session_factory=session_factory,
     )
 
