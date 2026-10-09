@@ -6,22 +6,37 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from psycopg_pool import AsyncConnectionPool
 from starlette.middleware.sessions import SessionMiddleware
 
 from auth.oauth import build_google_oauth
 from auth.router import router as auth_router
 from config import Settings, settings
-from core.database import build_engine, build_session_factory
+from core.database import build_engine, build_session_factory, psycopg_dsn
 from core.exceptions import AppException
 from llm.factory import LLMClientFactory
+from orchestration.checkpointer import prepare_checkpointer
+from orchestration.graph import build_session_graph
+from practice.router import router as practice_router
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    yield
-    await app.state.db_engine.dispose()
+    app_settings = app.state.settings
+    try:
+        async with AsyncConnectionPool(
+            conninfo=psycopg_dsn(app_settings.DATABASE_URL),
+            max_size=app_settings.CHECKPOINTER_POOL_MAX_SIZE,
+            open=False,
+            kwargs={"autocommit": True},
+        ) as pool:
+            checkpointer = await prepare_checkpointer(pool)
+            app.state.session_graph = build_session_graph(checkpointer=checkpointer)
+            yield
+    finally:
+        await app.state.db_engine.dispose()
 
 
 async def domain_exception_handler(
@@ -80,6 +95,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(auth_router)
+    app.include_router(practice_router)
 
     return app
 

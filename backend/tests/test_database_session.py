@@ -9,7 +9,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import Settings
-from core.database import build_engine, build_session_factory, get_db
+from core.database import build_engine, build_session_factory, get_db, psycopg_dsn
 from main import create_app
 from tests.helpers import settings_kwargs
 from users.models import User
@@ -131,3 +131,15 @@ def test_updated_at_moves_on_a_later_transaction(migrated_schema: str) -> None:
 
     assert first == created_at
     assert second > first
+
+
+def test_psycopg_dsn_drops_the_async_driver_and_keeps_the_password() -> None:
+    dsn = psycopg_dsn("postgresql+asyncpg://user:p%40ss@127.0.0.1:5433/cadence")
+
+    assert dsn == "postgresql://user:p%40ss@127.0.0.1:5433/cadence"
+
+
+def test_psycopg_dsn_translates_the_asyncpg_ssl_parameter_to_sslmode() -> None:
+    dsn = psycopg_dsn("postgresql+asyncpg://user:pass@db.example/cadence?ssl=require")
+
+    assert dsn == "postgresql://user:pass@db.example/cadence?sslmode=require"

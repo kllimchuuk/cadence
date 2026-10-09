@@ -18,8 +18,8 @@ PROBE_PREFIX = "/__test__"
 
 
 @pytest.fixture
-def settings() -> Settings:
-    return Settings(_env_file=None, **settings_kwargs())
+def settings(migrated_schema: str) -> Settings:
+    return Settings(_env_file=None, **settings_kwargs(DATABASE_URL=migrated_schema))
 
 
 @pytest.fixture

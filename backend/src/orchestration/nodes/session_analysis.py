@@ -52,4 +52,5 @@ async def session_analysis_node(
             observation.model_dump() for observation in result.skill_observations
         ],
         "persona_facts": result.new_facts,
+        "focus_points": result.focus_points,
     }

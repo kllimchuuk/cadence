@@ -5,7 +5,6 @@ from langgraph.types import RetryPolicy
 
 from llm.exceptions import LLMResponseError
 from orchestration.context import SessionRuntimeContext
-from orchestration.nodes import conversing
 from orchestration.nodes.briefing import briefing_node
 from orchestration.nodes.conversing import conversing_node
 from orchestration.nodes.finish_session import finish_session_node
@@ -17,20 +16,13 @@ from orchestration.state import SessionState
 
 _LLM_RETRY_POLICY = RetryPolicy(retry_on=LLMResponseError, max_attempts=3)
 
-_MEASURED_STEP_OVERHEAD = 7
+_MAX_NODES_PER_TURN = 6
 _RECURSION_LIMIT_MARGIN = 3
+RECURSION_LIMIT_PER_TURN = _MAX_NODES_PER_TURN + _RECURSION_LIMIT_MARGIN
 
 
 def decide_exit(state: SessionState) -> str:
     return "exit" if state["should_exit"] else "continue"
-
-
-def recursion_limit_for_session() -> int:
-    return (
-        conversing.MAX_CONVERSATION_TURNS
-        + _MEASURED_STEP_OVERHEAD
-        + _RECURSION_LIMIT_MARGIN
-    )
 
 
 def build_session_graph(

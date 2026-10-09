@@ -1,14 +1,21 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends
 
-from practice.exceptions import InvalidSessionStatusError, LearningSessionNotFoundError
+from practice.exceptions import (
+    InvalidSessionStatusError,
+    LearningSessionNotFoundError,
+    TooManyActiveSessionsError,
+)
 from practice.models import LearningSession, SessionStatus
 from practice.repository import LearningSessionRepository, get_practice_repository
 from scenarios.config import get_scenario
 
 _FINISHED_STATUSES = frozenset({SessionStatus.COMPLETED, SessionStatus.INCOMPLETE})
+MAX_ACTIVE_SESSIONS_PER_USER = 2
+ACTIVE_SESSION_WINDOW = timedelta(hours=1)
 
 
 class PracticeService:
@@ -19,6 +26,7 @@ class PracticeService:
         self, user_id: uuid.UUID, scenario_id: str
     ) -> LearningSession:
         get_scenario(scenario_id)
+        await self._require_session_capacity(user_id)
         return await self._repository.create(user_id, scenario_id)
 
     async def get_session(
@@ -45,6 +53,14 @@ class PracticeService:
         if record.ended_at is not None:
             return record
         return await self._repository.finish(record, status, transcript)
+
+    async def _require_session_capacity(self, user_id: uuid.UUID) -> None:
+        started_after = datetime.now(UTC) - ACTIVE_SESSION_WINDOW
+        active_sessions = await self._repository.count_in_progress_started_after(
+            user_id, started_after
+        )
+        if active_sessions >= MAX_ACTIVE_SESSIONS_PER_USER:
+            raise TooManyActiveSessionsError()
 
     @staticmethod
     def _require_finishable_status(status: SessionStatus) -> None:

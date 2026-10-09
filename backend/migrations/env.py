@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from config import settings
 from core.registry import metadata
+from orchestration.checkpointer import is_checkpointer_table
 
 config = context.config
 
@@ -21,6 +22,10 @@ def database_url() -> str:
     return config.attributes.get("sqlalchemy.url") or settings.DATABASE_URL
 
 
+def include_object(object_, name, type_, reflected, compare_to) -> bool:
+    return not (type_ == "table" and is_checkpointer_table(name))
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=database_url(),
@@ -28,6 +33,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_server_default=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -39,6 +45,7 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         compare_server_default=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
