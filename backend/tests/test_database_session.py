@@ -137,3 +137,9 @@ def test_psycopg_dsn_drops_the_async_driver_and_keeps_the_password() -> None:
     dsn = psycopg_dsn("postgresql+asyncpg://user:p%40ss@127.0.0.1:5433/cadence")
 
     assert dsn == "postgresql://user:p%40ss@127.0.0.1:5433/cadence"
+
+
+def test_psycopg_dsn_translates_the_asyncpg_ssl_parameter_to_sslmode() -> None:
+    dsn = psycopg_dsn("postgresql+asyncpg://user:pass@db.example/cadence?ssl=require")
+
+    assert dsn == "postgresql://user:pass@db.example/cadence?sslmode=require"

@@ -10,8 +10,8 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, make_url
 
 from core.database import build_engine
-from core.external_tables import is_externally_managed_table
 from core.registry import metadata
+from orchestration.checkpointer import is_checkpointer_table
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -34,6 +34,7 @@ def settings_kwargs(**overrides: str) -> dict[str, str]:
             "https://accounts.google.com/.well-known/openid-configuration"
         ),
         "GEMINI_API_KEY": "test-gemini-api-key",
+        "GEMINI_MODEL": "test-gemini-model",
     }
     kwargs.update(overrides)
     return kwargs
@@ -85,7 +86,7 @@ def table_names(url: str) -> list[str]:
 
 
 def _include_object(object_, name, type_, reflected, compare_to) -> bool:
-    return not (type_ == "table" and is_externally_managed_table(name))
+    return not (type_ == "table" and is_checkpointer_table(name))
 
 
 def _diff(connection: Connection) -> list:
@@ -109,7 +110,7 @@ async def run_graph_to_completion(
     initial_state: dict[str, Any],
     context: Any,
     config: dict[str, Any],
-    user_turns: list[str],
+    user_turns: list[str | dict[str, str]],
 ) -> dict[str, Any]:
     result = await graph.ainvoke(initial_state, context=context, config=config)
     for turn in user_turns:

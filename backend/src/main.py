@@ -6,7 +6,6 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -16,6 +15,7 @@ from config import Settings, settings
 from core.database import build_engine, build_session_factory, psycopg_dsn
 from core.exceptions import AppException
 from llm.factory import LLMClientFactory
+from orchestration.checkpointer import prepare_checkpointer
 from orchestration.graph import build_session_graph
 from practice.router import router as practice_router
 
@@ -32,8 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             open=False,
             kwargs={"autocommit": True},
         ) as pool:
-            checkpointer = AsyncPostgresSaver(pool)
-            await checkpointer.setup()
+            checkpointer = await prepare_checkpointer(pool)
             app.state.session_graph = build_session_graph(checkpointer=checkpointer)
             yield
     finally:

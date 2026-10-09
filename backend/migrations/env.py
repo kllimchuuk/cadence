@@ -7,8 +7,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from config import settings
-from core.external_tables import is_externally_managed_table
 from core.registry import metadata
+from orchestration.checkpointer import is_checkpointer_table
 
 config = context.config
 
@@ -23,7 +23,7 @@ def database_url() -> str:
 
 
 def include_object(object_, name, type_, reflected, compare_to) -> bool:
-    return not (type_ == "table" and is_externally_managed_table(name))
+    return not (type_ == "table" and is_checkpointer_table(name))
 
 
 def run_migrations_offline() -> None:
