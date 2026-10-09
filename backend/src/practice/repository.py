@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
@@ -24,6 +24,12 @@ class LearningSessionRepository(ABC):
 
     @abstractmethod
     async def get_by_user(self, user_id: uuid.UUID) -> list[LearningSession]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def count_in_progress_started_after(
+        self, user_id: uuid.UUID, started_after: datetime
+    ) -> int:
         raise NotImplementedError()
 
     @abstractmethod
@@ -63,6 +69,17 @@ class LearningSessionRepositoryImpl(LearningSessionRepository):
             select(LearningSession).where(LearningSession.user_id == user_id)
         )
         return list(result.scalars().all())
+
+    async def count_in_progress_started_after(
+        self, user_id: uuid.UUID, started_after: datetime
+    ) -> int:
+        return await self._session.scalar(
+            select(func.count()).where(
+                LearningSession.user_id == user_id,
+                LearningSession.status == SessionStatus.IN_PROGRESS,
+                LearningSession.started_at > started_after,
+            )
+        )
 
     async def finish(
         self,

@@ -4,10 +4,14 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from practice.exceptions import InvalidSessionStatusError, LearningSessionNotFoundError
+from practice.exceptions import (
+    InvalidSessionStatusError,
+    LearningSessionNotFoundError,
+    TooManyActiveSessionsError,
+)
 from practice.models import SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
-from practice.service import PracticeService
+from practice.service import MAX_ACTIVE_SESSIONS_PER_USER, PracticeService
 from scenarios.exceptions import UnknownScenarioError
 from users.repository import UserRepositoryImpl
 
@@ -134,3 +138,29 @@ async def test_finishing_with_in_progress_status_is_rejected(
 
     with pytest.raises(InvalidSessionStatusError):
         await service.finish_session(started.id, user_id, SessionStatus.IN_PROGRESS, [])
+
+
+@pytest.mark.asyncio
+async def test_starting_more_sessions_than_allowed_at_once_is_rejected(
+    service: PracticeService, user_id: uuid.UUID
+) -> None:
+    for _ in range(MAX_ACTIVE_SESSIONS_PER_USER):
+        await service.start_session(user_id, "job_interview")
+
+    with pytest.raises(TooManyActiveSessionsError):
+        await service.start_session(user_id, "job_interview")
+
+
+@pytest.mark.asyncio
+async def test_finishing_a_session_frees_a_slot_for_a_new_one(
+    service: PracticeService, user_id: uuid.UUID
+) -> None:
+    started = [
+        await service.start_session(user_id, "job_interview")
+        for _ in range(MAX_ACTIVE_SESSIONS_PER_USER)
+    ]
+    await service.finish_session(started[0].id, user_id, SessionStatus.INCOMPLETE, [])
+
+    replacement = await service.start_session(user_id, "job_interview")
+
+    assert replacement.status == SessionStatus.IN_PROGRESS

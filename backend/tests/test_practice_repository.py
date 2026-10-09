@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -112,3 +113,20 @@ async def test_an_unknown_id_reads_back_as_none(
     repository: LearningSessionRepository, user_id: uuid.UUID
 ) -> None:
     assert await repository.get_by_id(uuid.uuid4(), user_id) is None
+
+
+@pytest.mark.asyncio
+async def test_only_the_users_recent_in_progress_sessions_are_counted(
+    repository: LearningSessionRepository,
+    user_id: uuid.UUID,
+    other_user_id: uuid.UUID,
+) -> None:
+    await repository.create(user_id, "job_interview")
+    finished = await repository.create(user_id, "client_call")
+    await repository.finish(finished, SessionStatus.INCOMPLETE, [])
+    await repository.create(other_user_id, "job_interview")
+    an_hour_ago = datetime.now(UTC) - timedelta(hours=1)
+    in_an_hour = datetime.now(UTC) + timedelta(hours=1)
+
+    assert await repository.count_in_progress_started_after(user_id, an_hour_ago) == 1
+    assert await repository.count_in_progress_started_after(user_id, in_an_hour) == 0

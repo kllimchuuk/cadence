@@ -7,7 +7,8 @@ from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from orchestration.context import SessionRuntimeContext
-from orchestration.graph import recursion_limit_for_turn
+from orchestration.graph import RECURSION_LIMIT_PER_TURN
+from orchestration.nodes.conversing import END_SESSION_REQUEST
 from orchestration.state import initial_session_state
 from practice.models import LearningSession, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
@@ -61,6 +62,14 @@ class SessionRunner:
     ) -> SessionTurn:
         return await self._advance(learning_session, Command(resume=user_turn))
 
+    async def end_conversation(self, learning_session: LearningSession) -> SessionTurn:
+        if not await self._learner_has_spoken(learning_session):
+            await self.abandon_session(learning_session)
+            return SessionTurn(assistant_messages=(), awaiting_user=False)
+        return await self._advance(
+            learning_session, Command(resume=END_SESSION_REQUEST)
+        )
+
     async def abandon_session(self, learning_session: LearningSession) -> None:
         transcript = await self._checkpointed_transcript(learning_session)
         async with self._session_factory() as session:
@@ -72,6 +81,7 @@ class SessionRunner:
                 transcript,
             )
             await session.commit()
+        await self._forget(learning_session)
 
     async def _advance(
         self, learning_session: LearningSession, graph_input: Any
@@ -82,20 +92,40 @@ class SessionRunner:
             context=self._runtime_context,
             config=self._config(learning_session),
         )
-        return self._turn_from(result, delivered_entries)
+        turn = self._turn_from(result, delivered_entries)
+        if not turn.awaiting_user:
+            await self._forget(learning_session)
+        return turn
+
+    async def _forget(self, learning_session: LearningSession) -> None:
+        await self._graph.checkpointer.adelete_thread(self._thread_id(learning_session))
+
+    async def _learner_has_spoken(self, learning_session: LearningSession) -> bool:
+        checkpointed_state = await self._checkpointed_state(learning_session)
+        return checkpointed_state.get("turn_count", 0) > 0
 
     async def _checkpointed_transcript(
         self, learning_session: LearningSession
     ) -> list[dict[str, str]]:
+        checkpointed_state = await self._checkpointed_state(learning_session)
+        return checkpointed_state.get("transcript", [])
+
+    async def _checkpointed_state(
+        self, learning_session: LearningSession
+    ) -> dict[str, Any]:
         snapshot = await self._graph.aget_state(self._config(learning_session))
-        return snapshot.values.get("transcript", [])
+        return snapshot.values
+
+    @classmethod
+    def _config(cls, learning_session: LearningSession) -> dict[str, object]:
+        return {
+            "configurable": {"thread_id": cls._thread_id(learning_session)},
+            "recursion_limit": RECURSION_LIMIT_PER_TURN,
+        }
 
     @staticmethod
-    def _config(learning_session: LearningSession) -> dict[str, object]:
-        return {
-            "configurable": {"thread_id": str(learning_session.id)},
-            "recursion_limit": recursion_limit_for_turn(),
-        }
+    def _thread_id(learning_session: LearningSession) -> str:
+        return str(learning_session.id)
 
     @staticmethod
     def _turn_from(result: dict[str, Any], delivered_entries: int) -> SessionTurn:

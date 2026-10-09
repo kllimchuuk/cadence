@@ -18,14 +18,11 @@ _LLM_RETRY_POLICY = RetryPolicy(retry_on=LLMResponseError, max_attempts=3)
 
 _MAX_NODES_PER_TURN = 6
 _RECURSION_LIMIT_MARGIN = 3
+RECURSION_LIMIT_PER_TURN = _MAX_NODES_PER_TURN + _RECURSION_LIMIT_MARGIN
 
 
 def decide_exit(state: SessionState) -> str:
     return "exit" if state["should_exit"] else "continue"
-
-
-def recursion_limit_for_turn() -> int:
-    return _MAX_NODES_PER_TURN + _RECURSION_LIMIT_MARGIN
 
 
 def build_session_graph(

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from llm.exceptions import LLMResponseError
 from orchestration.context import SessionRuntimeContext
-from orchestration.graph import build_session_graph, recursion_limit_for_turn
+from orchestration.graph import RECURSION_LIMIT_PER_TURN, build_session_graph
 from orchestration.nodes import conversing as conversing_node_module
 from orchestration.schemas import SessionAnalysisResult, SkillObservation
 from orchestration.state import SessionState, initial_session_state
@@ -159,6 +159,38 @@ async def test_conversing_loops_until_should_exit_then_wraps_up(
     ]
     assert result["turn_count"] == 2
     assert result["should_exit"] is True
+
+
+@pytest.mark.asyncio
+async def test_an_end_session_request_wraps_up_without_another_reply(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+) -> None:
+    practice_service = PracticeService(LearningSessionRepositoryImpl(session))
+    learning_session = await practice_service.start_session(user_id, "job_interview")
+
+    graph = build_session_graph(checkpointer=InMemorySaver())
+    conversing_llm = _FakeLLMClient("Tell me more.")
+
+    result = await run_graph_to_completion(
+        graph,
+        _initial_state(learning_session.id, user_id),
+        _context(session_factory, _FakeLLMClient("Hi!"), conversing_llm),
+        _thread_config(),
+        user_turns=["Sure.", conversing_node_module.END_SESSION_REQUEST],
+    )
+
+    assert "__interrupt__" not in result
+    assert [entry["role"] for entry in result["transcript"]] == [
+        "assistant",
+        "user",
+        "assistant",
+        "assistant",
+    ]
+    assert result["turn_count"] == 1
+    assert len(conversing_llm.received_prompts) == 1
+    assert result["focus_points"] == ["Practice past-tense verbs"]
 
 
 @pytest.mark.asyncio
@@ -393,7 +425,7 @@ async def test_briefing_gives_up_after_exhausting_retries(
 
 
 @pytest.mark.asyncio
-async def test_recursion_limit_for_turn_is_enough_for_the_final_turns_exit_cascade(
+async def test_the_per_turn_recursion_limit_is_enough_for_the_final_turns_exit_cascade(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
@@ -429,7 +461,7 @@ async def test_recursion_limit_for_turn_is_enough_for_the_final_turns_exit_casca
         full_graph,
         _initial_state(full_session.id, user_id),
         full_context,
-        _thread_config(recursion_limit=recursion_limit_for_turn()),
+        _thread_config(recursion_limit=RECURSION_LIMIT_PER_TURN),
         user_turns=["Sure."],
     )
 

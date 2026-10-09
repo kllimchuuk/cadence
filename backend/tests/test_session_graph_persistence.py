@@ -7,7 +7,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from core.database import build_engine, build_session_factory, psycopg_dsn
 from orchestration.context import SessionRuntimeContext
-from orchestration.graph import build_session_graph, recursion_limit_for_turn
+from orchestration.graph import RECURSION_LIMIT_PER_TURN, build_session_graph
 from orchestration.nodes.conversing import MAX_CONVERSATION_TURNS
 from orchestration.schemas import SessionAnalysisResult
 from orchestration.state import initial_session_state
@@ -92,7 +92,7 @@ async def test_a_finished_session_is_readable_from_a_fresh_checkpointer(
                     context,
                     config={
                         "configurable": {"thread_id": thread_id},
-                        "recursion_limit": recursion_limit_for_turn(),
+                        "recursion_limit": RECURSION_LIMIT_PER_TURN,
                     },
                     user_turns=["Sounds good." for _ in range(MAX_CONVERSATION_TURNS)],
                 )

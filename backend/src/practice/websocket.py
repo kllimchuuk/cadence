@@ -2,16 +2,21 @@ import asyncio
 import logging
 from json import JSONDecodeError
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, ValidationError
+from starlette.websockets import WebSocketState
 
 from orchestration.session_runner import SessionRunner, SessionTurn
+from practice.exceptions import PracticeSessionIdleError, TooManyActiveSessionsError
 from practice.models import LearningSession
 from practice.schemas import (
+    CLIENT_MESSAGE_ADAPTER,
     AssistantMessage,
+    ClientMessage,
+    EndSession,
+    InvalidMessage,
     SessionEnded,
     SessionStarted,
-    UserMessage,
 )
 from scenarios.exceptions import UnknownScenarioError
 from users.models import User
@@ -22,16 +27,9 @@ UNAUTHENTICATED_CLOSE_CODE = 4401
 FORBIDDEN_ORIGIN_CLOSE_CODE = 4403
 INVALID_REQUEST_CLOSE_CODE = 4400
 IDLE_TIMEOUT_CLOSE_CODE = 4408
+TOO_MANY_SESSIONS_CLOSE_CODE = 4429
 INTERNAL_ERROR_CLOSE_CODE = 4500
 IDLE_TIMEOUT_SECONDS = 300
-
-
-class _InvalidClientMessageError(Exception):
-    pass
-
-
-class _IdleTimeoutError(Exception):
-    pass
 
 
 class PracticeSessionSocket:
@@ -70,6 +68,9 @@ class PracticeSessionSocket:
         except UnknownScenarioError:
             await self._websocket.close(code=INVALID_REQUEST_CLOSE_CODE)
             return None
+        except TooManyActiveSessionsError:
+            await self._websocket.close(code=TOO_MANY_SESSIONS_CLOSE_CODE)
+            return None
 
         await self._send(SessionStarted(session_id=learning_session.id))
         return learning_session
@@ -82,10 +83,8 @@ class PracticeSessionSocket:
         try:
             await self._exchange_turns(learning_session)
         except WebSocketDisconnect:
-            await asyncio.shield(self._runner.abandon_session(learning_session))
-        except _InvalidClientMessageError:
-            await self._abandon_and_close(learning_session, INVALID_REQUEST_CLOSE_CODE)
-        except _IdleTimeoutError:
+            await self._abandon(learning_session)
+        except PracticeSessionIdleError:
             await self._abandon_and_close(learning_session, IDLE_TIMEOUT_CLOSE_CODE)
         except Exception:
             logger.exception(
@@ -94,14 +93,21 @@ class PracticeSessionSocket:
             )
             await self._abandon_and_close(learning_session, INTERNAL_ERROR_CLOSE_CODE)
         else:
-            await self._websocket.close()
+            await self._close(status.WS_1000_NORMAL_CLOSURE)
 
     async def _abandon_and_close(
         self, learning_session: LearningSession, close_code: int
     ) -> None:
         try:
-            await self._runner.abandon_session(learning_session)
+            await self._abandon(learning_session)
         finally:
+            await self._close(close_code)
+
+    async def _abandon(self, learning_session: LearningSession) -> None:
+        await asyncio.shield(self._runner.abandon_session(learning_session))
+
+    async def _close(self, close_code: int) -> None:
+        if self._websocket.application_state == WebSocketState.CONNECTED:
             await self._websocket.close(code=close_code)
 
     async def _exchange_turns(self, learning_session: LearningSession) -> None:
@@ -109,9 +115,16 @@ class PracticeSessionSocket:
         await self._send_turn(turn)
 
         while turn.awaiting_user:
-            user_turn = await self._receive_user_turn()
-            turn = await self._runner.submit_turn(learning_session, user_turn)
+            message = await self._receive_client_message()
+            turn = await self._respond_to(learning_session, message)
             await self._send_turn(turn)
+
+    async def _respond_to(
+        self, learning_session: LearningSession, message: ClientMessage
+    ) -> SessionTurn:
+        if isinstance(message, EndSession):
+            return await self._runner.end_conversation(learning_session)
+        return await self._runner.submit_turn(learning_session, message.content)
 
     async def _send_turn(self, turn: SessionTurn) -> None:
         for content in turn.assistant_messages:
@@ -119,16 +132,20 @@ class PracticeSessionSocket:
         if not turn.awaiting_user:
             await self._send(SessionEnded(focus_points=list(turn.focus_points)))
 
-    async def _receive_user_turn(self) -> str:
+    async def _receive_client_message(self) -> ClientMessage:
         try:
-            payload = await asyncio.wait_for(
-                self._websocket.receive_json(), IDLE_TIMEOUT_SECONDS
-            )
-            return UserMessage.model_validate(payload).content
+            async with asyncio.timeout(IDLE_TIMEOUT_SECONDS):
+                return await self._receive_first_valid_message()
         except TimeoutError as error:
-            raise _IdleTimeoutError() from error
-        except (ValidationError, JSONDecodeError) as error:
-            raise _InvalidClientMessageError() from error
+            raise PracticeSessionIdleError() from error
+
+    async def _receive_first_valid_message(self) -> ClientMessage:
+        while True:
+            try:
+                payload = await self._websocket.receive_json()
+                return CLIENT_MESSAGE_ADAPTER.validate_python(payload)
+            except (ValidationError, JSONDecodeError):
+                await self._send(InvalidMessage())
 
     async def _send(self, message: BaseModel) -> None:
         await self._websocket.send_json(message.model_dump(mode="json"))

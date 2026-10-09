@@ -9,6 +9,7 @@ from persona.service import PersonaService
 from scenarios.config import get_scenario
 
 MAX_CONVERSATION_TURNS = 12
+END_SESSION_REQUEST = {"type": "end_session"}
 
 
 def _build_prompt(
@@ -22,6 +23,9 @@ async def conversing_node(
     state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
 ) -> dict[str, object]:
     user_turn = interrupt({"awaiting": "user_turn"})
+    if user_turn == END_SESSION_REQUEST:
+        return {"should_exit": True}
+
     scenario = get_scenario(state["scenario_id"])
 
     async with runtime.context.session_factory() as session:
