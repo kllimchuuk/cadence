@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket
 
-from auth.dependencies import get_optional_current_user, get_settings
+from auth.dependencies import get_settings, get_websocket_user
 from config import Settings
 from orchestration.dependencies import get_session_runner
 from orchestration.session_runner import SessionRunner
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/practice", tags=["practice"])
 async def practice_session_ws(
     websocket: WebSocket,
     scenario_id: str,
-    user: Annotated[User | None, Depends(get_optional_current_user)],
+    user: Annotated[User | None, Depends(get_websocket_user)],
     runner: Annotated[SessionRunner, Depends(get_session_runner)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
