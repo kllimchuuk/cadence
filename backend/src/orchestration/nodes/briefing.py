@@ -23,4 +23,7 @@ async def briefing_node(
     opening_line = await runtime.context.briefing_llm.generate(
         system_prompt, opening_messages()
     )
-    return {"transcript": [{"role": "assistant", "content": opening_line}]}
+    return {
+        "system_prompt": system_prompt,
+        "transcript": [{"role": "assistant", "content": opening_line}],
+    }

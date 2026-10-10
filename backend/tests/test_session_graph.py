@@ -469,3 +469,31 @@ async def test_session_analysis_receives_the_transcript_as_data(
     (message,) = session_analysis_llm.requests[0].messages
     assert message.role == MessageRole.USER
     assert json.loads(message.content) == result["transcript"]
+
+
+@pytest.mark.asyncio
+async def test_conversing_reuses_the_context_loaded_once_in_briefing(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+) -> None:
+    practice_service = PracticeService(LearningSessionRepositoryImpl(session))
+    learning_session = await practice_service.start_session(user_id, "job_interview")
+    persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
+    briefing_llm = FakeLLMClient("Hi!")
+    conversing_llm = FakeLLMClient("Go on.")
+    context = _context(session_factory, briefing_llm, conversing_llm)
+    config = _thread_config()
+
+    graph = build_session_graph(checkpointer=InMemorySaver())
+    await graph.ainvoke(
+        _initial_state(learning_session.id, user_id), context=context, config=config
+    )
+    await persona_service.remember(
+        user_id, "job_interview", ["Learned only after the briefing."]
+    )
+    await graph.ainvoke(Command(resume="Sure."), context=context, config=config)
+
+    system_instruction = conversing_llm.requests[0].system_instruction
+    assert system_instruction == briefing_llm.requests[0].system_instruction
+    assert "Learned only after the briefing." not in system_instruction
