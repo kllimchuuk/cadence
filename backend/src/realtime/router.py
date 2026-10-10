@@ -6,7 +6,7 @@ from auth.dependencies import get_settings, get_websocket_user
 from config import Settings
 from orchestration.dependencies import get_session_runner
 from orchestration.session_runner import SessionRunner
-from practice.websocket import PracticeSessionSocket
+from realtime.websocket import PracticeSessionSocket
 from users.models import User
 
 router = APIRouter(prefix="/practice", tags=["practice"])

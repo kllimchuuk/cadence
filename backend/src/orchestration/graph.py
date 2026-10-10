@@ -3,7 +3,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import RetryPolicy
 
-from llm.exceptions import LLMResponseError
+from llm.exceptions import LLMResponseError, LLMUnavailableError
 from orchestration.context import SessionRuntimeContext
 from orchestration.nodes.briefing import briefing_node
 from orchestration.nodes.conversing import conversing_node
@@ -14,7 +14,9 @@ from orchestration.nodes.weakness_state_update import weakness_state_update_node
 from orchestration.nodes.wrap_up import wrap_up_node
 from orchestration.state import SessionState
 
-_LLM_RETRY_POLICY = RetryPolicy(retry_on=LLMResponseError, max_attempts=3)
+_LLM_RETRY_POLICY = RetryPolicy(
+    retry_on=(LLMResponseError, LLMUnavailableError), max_attempts=3
+)
 
 _MAX_NODES_PER_TURN = 6
 _RECURSION_LIMIT_MARGIN = 3

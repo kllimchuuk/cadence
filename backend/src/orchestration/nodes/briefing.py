@@ -1,7 +1,7 @@
 from langgraph.runtime import Runtime
 
 from orchestration.context import SessionRuntimeContext
-from orchestration.prompts import build_persona_system_prompt
+from orchestration.prompts import build_persona_system_prompt, opening_messages
 from orchestration.state import SessionState
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
@@ -20,10 +20,10 @@ async def briefing_node(
         )
 
     system_prompt = build_persona_system_prompt(scenario, persona_memory)
-    prompt = (
-        f"{system_prompt}\n\n"
-        "Greet the user in character and invite them to begin whenever "
-        "they're ready."
+    opening_line = await runtime.context.briefing_llm.generate(
+        system_prompt, opening_messages()
     )
-    opening_line = await runtime.context.briefing_llm.generate(prompt)
-    return {"transcript": [{"role": "assistant", "content": opening_line}]}
+    return {
+        "system_prompt": system_prompt,
+        "transcript": [{"role": "assistant", "content": opening_line}],
+    }

@@ -2,21 +2,11 @@ from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
 from orchestration.context import SessionRuntimeContext
-from orchestration.prompts import build_persona_system_prompt
+from orchestration.prompts import conversation_messages
 from orchestration.state import SessionState
-from persona.repository import PersonaMemoryRepositoryImpl
-from persona.service import PersonaService
-from scenarios.config import get_scenario
 
 MAX_CONVERSATION_TURNS = 12
 END_SESSION_REQUEST = {"type": "end_session"}
-
-
-def _build_prompt(
-    system_prompt: str, transcript: list[dict[str, str]], user_turn: str
-) -> str:
-    history = "\n".join(f'{entry["role"]}: {entry["content"]}' for entry in transcript)
-    return f"{system_prompt}\n\n{history}\nuser: {user_turn}\nassistant:"
 
 
 async def conversing_node(
@@ -26,17 +16,9 @@ async def conversing_node(
     if user_turn == END_SESSION_REQUEST:
         return {"should_exit": True}
 
-    scenario = get_scenario(state["scenario_id"])
-
-    async with runtime.context.session_factory() as session:
-        persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
-        persona_memory = await persona_service.get_memory(
-            state["user_id"], state["scenario_id"]
-        )
-
-    system_prompt = build_persona_system_prompt(scenario, persona_memory)
-    prompt = _build_prompt(system_prompt, state["transcript"], user_turn)
-    assistant_reply = await runtime.context.conversing_llm.generate(prompt)
+    assistant_reply = await runtime.context.conversing_llm.generate(
+        state["system_prompt"], conversation_messages(state["transcript"], user_turn)
+    )
 
     turn_count = state["turn_count"] + 1
     return {

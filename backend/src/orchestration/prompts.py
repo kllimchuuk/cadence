@@ -1,5 +1,11 @@
+from llm.client import ChatMessage, MessageRole
 from persona.models import PersonaMemory
 from scenarios.config import Scenario
+
+OPENING_CUE = (
+    "(The learner has just joined. Greet them in character and invite them to "
+    "begin whenever they're ready.)"
+)
 
 
 def build_persona_system_prompt(
@@ -18,3 +24,21 @@ def build_persona_system_prompt(
             + "; ".join(persona_memory.facts)
         )
     return "\n".join(lines)
+
+
+def opening_messages() -> list[ChatMessage]:
+    return [ChatMessage(MessageRole.USER, OPENING_CUE)]
+
+
+def conversation_messages(
+    transcript: list[dict[str, str]], user_turn: str
+) -> list[ChatMessage]:
+    history = [
+        ChatMessage(MessageRole(entry["role"]), entry["content"])
+        for entry in transcript
+    ]
+    return [
+        *opening_messages(),
+        *history,
+        ChatMessage(MessageRole.USER, user_turn),
+    ]

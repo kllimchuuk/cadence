@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from orchestration.context import SessionRuntimeContext
 from orchestration.graph import build_session_graph
 from orchestration.nodes import conversing as conversing_node_module
-from orchestration.schemas import SessionAnalysisResult
 from orchestration.state import initial_session_state
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
@@ -16,31 +15,8 @@ from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
 
+from tests.fakes import FakeLLMClient, analysis_result
 from tests.helpers import run_graph_to_completion
-
-
-class _FakeLLMClient:
-    def __init__(self, reply: str) -> None:
-        self._reply = reply
-
-    async def generate(self, _prompt: str) -> str:
-        return self._reply
-
-    async def generate_structured(self, prompt: str, schema: type) -> object:
-        raise NotImplementedError()
-
-
-class _FakeStructuredLLMClient:
-    def __init__(self, result: SessionAnalysisResult) -> None:
-        self._result = result
-
-    async def generate(self, prompt: str) -> str:
-        raise NotImplementedError()
-
-    async def generate_structured(
-        self, prompt: str, schema: type
-    ) -> SessionAnalysisResult:
-        return self._result
 
 
 @pytest_asyncio.fixture
@@ -69,17 +45,11 @@ async def test_persona_memory_update_writes_real_facts(
 
     graph = build_session_graph(checkpointer=InMemorySaver())
     context = SessionRuntimeContext(
-        briefing_llm=_FakeLLMClient("Hi, thanks for joining!"),
-        conversing_llm=_FakeLLMClient("That's a great start — tell me more."),
-        session_analysis_llm=_FakeStructuredLLMClient(
-            SessionAnalysisResult(
-                grammar_findings=[],
-                vocabulary_findings=[],
-                fluency_findings={},
-                task_completion={},
-                focus_points=["Practice past-tense verbs"],
-                skill_observations=[],
-                new_facts=["User is preparing for a backend interview."],
+        briefing_llm=FakeLLMClient("Hi, thanks for joining!"),
+        conversing_llm=FakeLLMClient("That's a great start — tell me more."),
+        session_analysis_llm=FakeLLMClient(
+            analysis=analysis_result(
+                new_facts=["User is preparing for a backend interview."]
             )
         ),
         session_factory=session_factory,
