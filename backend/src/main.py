@@ -74,7 +74,9 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     app.state.db_engine = build_engine(app_settings.DATABASE_URL)
     app.state.session_factory = build_session_factory(app.state.db_engine)
     app.state.oauth = build_google_oauth(app_settings)
-    app.state.llm_client_factory = LLMClientFactory(app_settings.GEMINI_API_KEY)
+    app.state.llm_client_factory = LLMClientFactory(
+        app_settings.GEMINI_API_KEY, app_settings.LLM_TIMEOUT_SECONDS
+    )
 
     app.add_exception_handler(AppException, domain_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)

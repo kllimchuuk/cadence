@@ -7,7 +7,7 @@ from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from llm.exceptions import LLMResponseError
+from llm.exceptions import LLMResponseError, LLMUnavailableError
 from orchestration.context import SessionRuntimeContext
 from orchestration.graph import RECURSION_LIMIT_PER_TURN, build_session_graph
 from orchestration.nodes import conversing as conversing_node_module
@@ -44,15 +44,21 @@ class _FakeLLMClient:
 
 
 class _FlakyLLMClient:
-    def __init__(self, reply: str, fail_times: int) -> None:
+    def __init__(
+        self,
+        reply: str,
+        fail_times: int,
+        error: Exception = LLMResponseError("transient failure"),
+    ) -> None:
         self._reply = reply
         self._fail_times = fail_times
+        self._error = error
         self.call_count = 0
 
     async def generate(self, prompt: str) -> str:
         self.call_count += 1
         if self.call_count <= self._fail_times:
-            raise LLMResponseError("transient failure")
+            raise self._error
         return self._reply
 
     async def generate_structured(self, prompt: str, schema: type) -> object:
@@ -377,16 +383,24 @@ async def test_session_analysis_prompt_includes_the_scenarios_goal_checklist(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error",
+    [
+        LLMResponseError("empty response"),
+        LLMUnavailableError("429 RESOURCE_EXHAUSTED"),
+    ],
+)
 async def test_briefing_recovers_from_a_transient_llm_failure(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
+    error: Exception,
 ) -> None:
     practice_service = PracticeService(LearningSessionRepositoryImpl(session))
     learning_session = await practice_service.start_session(user_id, "job_interview")
 
     graph = build_session_graph(checkpointer=InMemorySaver())
-    briefing_llm = _FlakyLLMClient("Hi, thanks for joining!", fail_times=2)
+    briefing_llm = _FlakyLLMClient("Hi, thanks for joining!", fail_times=2, error=error)
     conversing_llm = _FakeLLMClient("continuing")
 
     result = await graph.ainvoke(
