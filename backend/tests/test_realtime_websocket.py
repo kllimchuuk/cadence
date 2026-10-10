@@ -15,7 +15,6 @@ from core.database import build_engine, build_session_factory
 from llm.dependencies import get_llm_client_factory
 from main import create_app
 from orchestration.nodes import conversing as conversing_node_module
-from orchestration.schemas import SessionAnalysisResult
 from practice.models import LearningSession, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from realtime import websocket as websocket_module
@@ -28,6 +27,7 @@ from realtime.websocket import (
     TOO_MANY_SESSIONS_CLOSE_CODE,
     UNAUTHENTICATED_CLOSE_CODE,
 )
+from tests.fakes import FailingLLMClient, FakeLLMClient, FakeLLMClientFactory
 from tests.helpers import settings_kwargs
 
 POLL_TIMEOUT_SECONDS = 3
@@ -56,51 +56,6 @@ def register_payload(**overrides: str) -> dict:
     }
     payload.update(overrides)
     return payload
-
-
-class _FakeDualClient:
-    def __init__(self, reply: str, analysis_result: SessionAnalysisResult) -> None:
-        self._reply = reply
-        self._analysis_result = analysis_result
-
-    async def generate(self, _prompt: str) -> str:
-        return self._reply
-
-    async def generate_structured(
-        self, _prompt: str, _schema: type
-    ) -> SessionAnalysisResult:
-        return self._analysis_result
-
-
-class _FakeLLMClientFactory:
-    def __init__(self, reply: str, analysis_result: SessionAnalysisResult) -> None:
-        self._reply = reply
-        self._analysis_result = analysis_result
-
-    def create(self, _model: str) -> _FakeDualClient:
-        return _FakeDualClient(self._reply, self._analysis_result)
-
-
-class _FailingLLMClient:
-    async def generate(self, _prompt: str) -> str:
-        raise RuntimeError("the model is unavailable")
-
-
-class _FailingLLMClientFactory:
-    def create(self, _model: str) -> _FailingLLMClient:
-        return _FailingLLMClient()
-
-
-def _default_analysis_result() -> SessionAnalysisResult:
-    return SessionAnalysisResult(
-        grammar_findings=[],
-        vocabulary_findings=[],
-        fluency_findings={},
-        task_completion={},
-        focus_points=["Practice past-tense verbs"],
-        skill_observations=[],
-        new_facts=[],
-    )
 
 
 def _fetch_session(
@@ -171,8 +126,8 @@ def client(migrated_schema: str) -> Iterator[TestClient]:
         **settings_kwargs(DATABASE_URL=migrated_schema, SECURE_COOKIES="false"),
     )
     app = create_app(settings)
-    app.dependency_overrides[get_llm_client_factory] = lambda: _FakeLLMClientFactory(
-        "Great, tell me more.", _default_analysis_result()
+    app.dependency_overrides[get_llm_client_factory] = lambda: FakeLLMClientFactory(
+        FakeLLMClient("Great, tell me more.")
     )
 
     with TestClient(app) as test_client:
@@ -280,7 +235,7 @@ def test_an_internal_failure_closes_the_socket_and_abandons_the_session(
     migrated_schema: str,
 ) -> None:
     client.app.dependency_overrides[get_llm_client_factory] = (
-        lambda: _FailingLLMClientFactory()
+        lambda: FakeLLMClientFactory(FailingLLMClient())
     )
     register_response = client.post("/auth/register", json=register_payload())
     user_id = uuid.UUID(register_response.json()["id"])

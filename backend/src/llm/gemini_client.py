@@ -1,11 +1,23 @@
 import asyncio
+from collections.abc import Sequence
 from http import HTTPStatus
 
 from google import genai
 from google.genai import errors, types
 
-from llm.client import SchemaT
+from llm.client import ChatMessage, MessageRole, SchemaT
 from llm.exceptions import LLMResponseError, LLMUnavailableError
+
+_GEMINI_ROLES = {MessageRole.USER: "user", MessageRole.ASSISTANT: "model"}
+
+
+def _to_contents(messages: Sequence[ChatMessage]) -> list[types.Content]:
+    return [
+        types.Content(
+            role=_GEMINI_ROLES[message.role], parts=[types.Part(text=message.content)]
+        )
+        for message in messages
+    ]
 
 
 def _diagnose(response: types.GenerateContentResponse) -> str:
@@ -32,17 +44,29 @@ class GeminiClient:
         self._model = model
         self._timeout_seconds = timeout_seconds
 
-    async def generate(self, prompt: str) -> str:
-        response = await self._generate_content(contents=prompt)
+    async def generate(
+        self, system_instruction: str, messages: Sequence[ChatMessage]
+    ) -> str:
+        response = await self._generate_content(
+            contents=_to_contents(messages),
+            config=types.GenerateContentConfig(system_instruction=system_instruction),
+        )
         if response.text is None:
             raise LLMResponseError(f"no text ({_diagnose(response)})")
         return response.text
 
-    async def generate_structured(self, prompt: str, schema: type[SchemaT]) -> SchemaT:
+    async def generate_structured(
+        self,
+        system_instruction: str,
+        messages: Sequence[ChatMessage],
+        schema: type[SchemaT],
+    ) -> SchemaT:
         response = await self._generate_content(
-            contents=prompt,
+            contents=_to_contents(messages),
             config=types.GenerateContentConfig(
-                response_mime_type="application/json", response_schema=schema
+                system_instruction=system_instruction,
+                response_mime_type="application/json",
+                response_schema=schema,
             ),
         )
         if response.parsed is None:

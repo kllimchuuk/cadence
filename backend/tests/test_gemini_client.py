@@ -4,11 +4,18 @@ import pytest
 from google.genai import errors
 from pydantic import BaseModel
 
+from llm.client import ChatMessage, MessageRole
 from llm.exceptions import LLMResponseError, LLMUnavailableError
 from llm.gemini_client import GeminiClient
 
 TIMEOUT_SECONDS = 1
 SHORT_TIMEOUT_SECONDS = 0.01
+SYSTEM_INSTRUCTION = "You are Priya, a hiring manager."
+MESSAGES = (
+    ChatMessage(MessageRole.USER, "Hello."),
+    ChatMessage(MessageRole.ASSISTANT, "Hi, thanks for joining."),
+    ChatMessage(MessageRole.USER, "Glad to be here."),
+)
 
 
 class _Schema(BaseModel):
@@ -90,7 +97,7 @@ async def test_generate_returns_the_response_text() -> None:
         _FakeGenaiClient(_FakeResponse(text="hello")), "gemini-flash", TIMEOUT_SECONDS
     )
 
-    assert await client.generate("prompt") == "hello"
+    assert await client.generate(SYSTEM_INSTRUCTION, MESSAGES) == "hello"
 
 
 @pytest.mark.asyncio
@@ -104,7 +111,7 @@ async def test_generate_raises_when_gemini_returns_no_text() -> None:
     )
 
     with pytest.raises(LLMResponseError):
-        await client.generate("prompt")
+        await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
 
 
 @pytest.mark.asyncio
@@ -116,7 +123,7 @@ async def test_generate_raises_when_the_prompt_itself_was_blocked() -> None:
     )
 
     with pytest.raises(LLMResponseError, match="SAFETY"):
-        await client.generate("prompt")
+        await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
 
 
 @pytest.mark.asyncio
@@ -126,7 +133,7 @@ async def test_generate_structured_returns_the_parsed_model() -> None:
         _FakeGenaiClient(_FakeResponse(parsed=parsed)), "gemini-flash", TIMEOUT_SECONDS
     )
 
-    result = await client.generate_structured("prompt", _Schema)
+    result = await client.generate_structured(SYSTEM_INSTRUCTION, MESSAGES, _Schema)
 
     assert result is parsed
 
@@ -144,7 +151,7 @@ async def test_generate_structured_raises_when_gemini_returns_nothing_parseable(
     )
 
     with pytest.raises(LLMResponseError):
-        await client.generate_structured("prompt", _Schema)
+        await client.generate_structured(SYSTEM_INSTRUCTION, MESSAGES, _Schema)
 
 
 @pytest.mark.asyncio
@@ -159,7 +166,7 @@ async def test_a_rate_limit_or_server_error_is_reported_as_unavailable(
     )
 
     with pytest.raises(LLMUnavailableError):
-        await client.generate("prompt")
+        await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
 
 
 @pytest.mark.asyncio
@@ -171,7 +178,7 @@ async def test_a_client_error_is_not_reported_as_unavailable() -> None:
     )
 
     with pytest.raises(errors.APIError):
-        await client.generate("prompt")
+        await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
 
 
 @pytest.mark.asyncio
@@ -181,4 +188,25 @@ async def test_a_call_that_outlives_the_timeout_is_reported_as_unavailable() -> 
     )
 
     with pytest.raises(LLMUnavailableError):
-        await client.generate_structured("prompt", _Schema)
+        await client.generate_structured(SYSTEM_INSTRUCTION, MESSAGES, _Schema)
+
+
+@pytest.mark.asyncio
+async def test_messages_keep_their_roles_and_the_system_instruction_is_separate() -> (
+    None
+):
+    genai_client = _FakeGenaiClient(_FakeResponse(text="hello"))
+    client = GeminiClient(genai_client, "gemini-flash", TIMEOUT_SECONDS)
+
+    await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
+
+    request = genai_client.aio.models.received_kwargs
+    assert [content.role for content in request["contents"]] == [
+        "user",
+        "model",
+        "user",
+    ]
+    assert [content.parts[0].text for content in request["contents"]] == [
+        message.content for message in MESSAGES
+    ]
+    assert request["config"].system_instruction == SYSTEM_INSTRUCTION

@@ -16,31 +16,8 @@ from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
 
+from tests.fakes import FakeLLMClient
 from tests.helpers import run_graph_to_completion
-
-
-class _FakeLLMClient:
-    def __init__(self, reply: str) -> None:
-        self._reply = reply
-
-    async def generate(self, _prompt: str) -> str:
-        return self._reply
-
-    async def generate_structured(self, prompt: str, schema: type) -> object:
-        raise NotImplementedError()
-
-
-class _FakeStructuredLLMClient:
-    def __init__(self, result: SessionAnalysisResult) -> None:
-        self._result = result
-
-    async def generate(self, prompt: str) -> str:
-        raise NotImplementedError()
-
-    async def generate_structured(
-        self, prompt: str, schema: type
-    ) -> SessionAnalysisResult:
-        return self._result
 
 
 @pytest_asyncio.fixture
@@ -69,10 +46,10 @@ async def test_session_analysis_writes_a_real_analysis_row(
 
     graph = build_session_graph(checkpointer=InMemorySaver())
     context = SessionRuntimeContext(
-        briefing_llm=_FakeLLMClient("Hi, thanks for joining!"),
-        conversing_llm=_FakeLLMClient("That's a great start — tell me more."),
-        session_analysis_llm=_FakeStructuredLLMClient(
-            SessionAnalysisResult(
+        briefing_llm=FakeLLMClient("Hi, thanks for joining!"),
+        conversing_llm=FakeLLMClient("That's a great start — tell me more."),
+        session_analysis_llm=FakeLLMClient(
+            analysis=SessionAnalysisResult(
                 grammar_findings=[{"note": "past tense slip"}],
                 vocabulary_findings=[],
                 fluency_findings={"filler_word_count": 2},

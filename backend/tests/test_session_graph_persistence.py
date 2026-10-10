@@ -9,42 +9,13 @@ from core.database import build_engine, build_session_factory, psycopg_dsn
 from orchestration.context import SessionRuntimeContext
 from orchestration.graph import RECURSION_LIMIT_PER_TURN, build_session_graph
 from orchestration.nodes.conversing import MAX_CONVERSATION_TURNS
-from orchestration.schemas import SessionAnalysisResult
 from orchestration.state import initial_session_state
 from practice.models import SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from users.repository import UserRepositoryImpl
 
+from tests.fakes import FakeLLMClient
 from tests.helpers import alembic_config, run_graph_to_completion
-
-
-class _FakeLLMClient:
-    def __init__(self, reply: str) -> None:
-        self._reply = reply
-
-    async def generate(self, _prompt: str) -> str:
-        return self._reply
-
-    async def generate_structured(self, prompt: str, schema: type) -> object:
-        raise NotImplementedError()
-
-
-class _FakeStructuredLLMClient:
-    async def generate(self, prompt: str) -> str:
-        raise NotImplementedError()
-
-    async def generate_structured(
-        self, prompt: str, schema: type
-    ) -> SessionAnalysisResult:
-        return SessionAnalysisResult(
-            grammar_findings=[],
-            vocabulary_findings=[],
-            fluency_findings={},
-            task_completion={},
-            focus_points=["Practice past-tense verbs"],
-            skill_observations=[],
-            new_facts=[],
-        )
 
 
 @pytest.mark.asyncio
@@ -74,9 +45,9 @@ async def test_a_finished_session_is_readable_from_a_fresh_checkpointer(
 
         try:
             context = SessionRuntimeContext(
-                briefing_llm=_FakeLLMClient("Hi, thanks for joining!"),
-                conversing_llm=_FakeLLMClient("That's a great start — tell me more."),
-                session_analysis_llm=_FakeStructuredLLMClient(),
+                briefing_llm=FakeLLMClient("Hi, thanks for joining!"),
+                conversing_llm=FakeLLMClient("That's a great start — tell me more."),
+                session_analysis_llm=FakeLLMClient(),
                 session_factory=session_factory,
             )
             initial_state = initial_session_state(
