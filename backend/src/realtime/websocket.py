@@ -7,9 +7,10 @@ from pydantic import BaseModel, ValidationError
 from starlette.websockets import WebSocketState
 
 from orchestration.session_runner import SessionRunner, SessionTurn
-from practice.exceptions import PracticeSessionIdleError, TooManyActiveSessionsError
+from practice.exceptions import TooManyActiveSessionsError
 from practice.models import LearningSession
-from practice.schemas import (
+from realtime.exceptions import PracticeSessionIdleError
+from realtime.schemas import (
     CLIENT_MESSAGE_ADAPTER,
     AssistantMessage,
     ClientMessage,

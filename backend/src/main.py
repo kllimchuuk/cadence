@@ -17,7 +17,7 @@ from core.exceptions import AppException
 from llm.factory import LLMClientFactory
 from orchestration.checkpointer import prepare_checkpointer
 from orchestration.graph import build_session_graph
-from practice.router import router as practice_router
+from realtime.router import router as realtime_router
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(auth_router)
-    app.include_router(practice_router)
+    app.include_router(realtime_router)
 
     return app
 

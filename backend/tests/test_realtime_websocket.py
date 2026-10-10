@@ -16,11 +16,11 @@ from llm.dependencies import get_llm_client_factory
 from main import create_app
 from orchestration.nodes import conversing as conversing_node_module
 from orchestration.schemas import SessionAnalysisResult
-from practice import websocket as websocket_module
 from practice.models import LearningSession, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
-from practice.schemas import MAX_USER_TURN_LENGTH
-from practice.websocket import (
+from realtime import websocket as websocket_module
+from realtime.schemas import MAX_USER_TURN_LENGTH
+from realtime.websocket import (
     FORBIDDEN_ORIGIN_CLOSE_CODE,
     IDLE_TIMEOUT_CLOSE_CODE,
     INTERNAL_ERROR_CLOSE_CODE,
