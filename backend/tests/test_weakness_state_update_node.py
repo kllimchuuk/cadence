@@ -5,10 +5,10 @@ import pytest_asyncio
 from langgraph.checkpoint.memory import InMemorySaver
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from analysis.schemas import SkillObservation
 from orchestration.context import SessionRuntimeContext
 from orchestration.graph import build_session_graph
 from orchestration.nodes import conversing as conversing_node_module
-from orchestration.schemas import SessionAnalysisResult, SkillObservation
 from orchestration.state import initial_session_state
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
@@ -16,7 +16,7 @@ from users.repository import UserRepositoryImpl
 from weaknesses.models import WeaknessCategory, WeaknessState
 from weaknesses.repository import WeaknessRecordRepositoryImpl
 
-from tests.fakes import FakeLLMClient
+from tests.fakes import FakeLLMClient, analysis_result
 from tests.helpers import run_graph_to_completion
 
 
@@ -49,21 +49,16 @@ async def test_weakness_state_update_writes_a_real_weakness_record(
         briefing_llm=FakeLLMClient("Hi, thanks for joining!"),
         conversing_llm=FakeLLMClient("That's a great start — tell me more."),
         session_analysis_llm=FakeLLMClient(
-            analysis=SessionAnalysisResult(
-                grammar_findings=[],
-                vocabulary_findings=[],
-                fluency_findings={},
-                task_completion={},
-                focus_points=["Practice past-tense verbs"],
+            analysis=analysis_result(
                 skill_observations=[
                     SkillObservation(
                         category="grammar",
                         skill_key="past_simple",
                         outcome="error",
+                        evidence="Yesterday I go to the office.",
                         note="Used present tense for a past event.",
                     )
-                ],
-                new_facts=[],
+                ]
             )
         ),
         session_factory=session_factory,

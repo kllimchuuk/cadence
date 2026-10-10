@@ -27,6 +27,8 @@ class SessionAnalysis(Base):
     fluency_findings: Mapped[dict] = mapped_column(JSONB)
     task_completion: Mapped[dict] = mapped_column(JSONB)
     focus_points: Mapped[list] = mapped_column(JSONB)
+    skill_observations: Mapped[list] = mapped_column(JSONB)
+    new_facts: Mapped[list] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

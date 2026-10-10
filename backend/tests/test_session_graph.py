@@ -8,13 +8,13 @@ from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from analysis.schemas import SkillObservation
 from llm.client import ChatMessage, MessageRole
 from llm.exceptions import LLMResponseError, LLMUnavailableError
 from orchestration.context import SessionRuntimeContext
 from orchestration.graph import RECURSION_LIMIT_PER_TURN, build_session_graph
 from orchestration.nodes import conversing as conversing_node_module
 from orchestration.prompts import OPENING_CUE
-from orchestration.schemas import SkillObservation
 from orchestration.state import SessionState, initial_session_state
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
@@ -63,6 +63,7 @@ def _context(
                         category="grammar",
                         skill_key="past_simple",
                         outcome="error",
+                        evidence="Yesterday I go to the office.",
                         note="Used present tense for a past event.",
                     )
                 ],
@@ -207,6 +208,7 @@ async def test_session_analysis_forwards_its_findings_to_downstream_nodes(
             "category": "grammar",
             "skill_key": "past_simple",
             "outcome": "error",
+            "evidence": "Yesterday I go to the office.",
             "note": "Used present tense for a past event.",
         }
     ]

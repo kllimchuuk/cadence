@@ -5,12 +5,20 @@ import pytest_asyncio
 from langgraph.checkpoint.memory import InMemorySaver
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from analysis.schemas import (
+    FluencyAssessment,
+    GoalOutcome,
+    LanguageFinding,
+    PersonaFact,
+    SessionAnalysisResult,
+    SkillObservation,
+    TaskCompletion,
+)
 from analysis.repository import SessionAnalysisRepositoryImpl
 from analysis.service import AnalysisService
 from orchestration.context import SessionRuntimeContext
 from orchestration.graph import build_session_graph
 from orchestration.nodes import conversing as conversing_node_module
-from orchestration.schemas import SessionAnalysisResult, SkillObservation
 from orchestration.state import initial_session_state
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
@@ -50,20 +58,40 @@ async def test_session_analysis_writes_a_real_analysis_row(
         conversing_llm=FakeLLMClient("That's a great start — tell me more."),
         session_analysis_llm=FakeLLMClient(
             analysis=SessionAnalysisResult(
-                grammar_findings=[{"note": "past tense slip"}],
+                grammar_findings=[
+                    LanguageFinding(
+                        evidence="Yesterday I go to the office.",
+                        issue="Present tense for a past event.",
+                        correction="Yesterday I went to the office.",
+                    )
+                ],
                 vocabulary_findings=[],
-                fluency_findings={"filler_word_count": 2},
-                task_completion={"completed_items": ["greet the interviewer"]},
+                fluency_findings=FluencyAssessment(summary="Steady pace."),
+                task_completion=TaskCompletion(
+                    goals=[
+                        GoalOutcome(
+                            goal="greet the interviewer",
+                            achieved=True,
+                            evidence="Hi, nice to meet you.",
+                        )
+                    ]
+                ),
                 focus_points=["Practice past-tense verbs"],
                 skill_observations=[
                     SkillObservation(
                         category="grammar",
                         skill_key="past_simple",
                         outcome="error",
+                        evidence="Yesterday I go to the office.",
                         note="Used present tense for a past event.",
                     )
                 ],
-                new_facts=["User is preparing for a backend interview."],
+                new_facts=[
+                    PersonaFact(
+                        fact="User is preparing for a backend interview.",
+                        evidence="I have a backend interview next week.",
+                    )
+                ],
             )
         ),
         session_factory=session_factory,
@@ -83,4 +111,34 @@ async def test_session_analysis_writes_a_real_analysis_row(
     stored = await analysis_service.get_analysis(learning_session.id, user_id)
     assert stored is not None
     assert stored.focus_points == ["Practice past-tense verbs"]
-    assert stored.grammar_findings == [{"note": "past tense slip"}]
+    assert stored.grammar_findings == [
+        {
+            "evidence": "Yesterday I go to the office.",
+            "issue": "Present tense for a past event.",
+            "correction": "Yesterday I went to the office.",
+        }
+    ]
+    assert stored.task_completion == {
+        "goals": [
+            {
+                "goal": "greet the interviewer",
+                "achieved": True,
+                "evidence": "Hi, nice to meet you.",
+            }
+        ]
+    }
+    assert stored.skill_observations == [
+        {
+            "category": "grammar",
+            "skill_key": "past_simple",
+            "outcome": "error",
+            "evidence": "Yesterday I go to the office.",
+            "note": "Used present tense for a past event.",
+        }
+    ]
+    assert stored.new_facts == [
+        {
+            "fact": "User is preparing for a backend interview.",
+            "evidence": "I have a backend interview next week.",
+        }
+    ]

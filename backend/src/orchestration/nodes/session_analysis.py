@@ -3,10 +3,10 @@ import json
 from langgraph.runtime import Runtime
 
 from analysis.repository import SessionAnalysisRepositoryImpl
+from analysis.schemas import SessionAnalysisResult
 from analysis.service import AnalysisService
 from llm.client import ChatMessage, MessageRole
 from orchestration.context import SessionRuntimeContext
-from orchestration.schemas import SessionAnalysisResult
 from orchestration.state import SessionState
 from practice.repository import LearningSessionRepositoryImpl
 from scenarios.config import Scenario, get_scenario
@@ -21,7 +21,9 @@ def _build_system_instruction(scenario: Scenario) -> str:
         f"Score task completion against this checklist: {goals}.\n"
         "Report 1-3 focus points, one observation per tracked skill (error or "
         "clean use), and any new facts about the user worth remembering for "
-        "next time."
+        "next time. Back every finding, observation and fact with the learner's "
+        "exact words from the transcript as evidence; leave out anything you "
+        "cannot quote."
     )
 
 
@@ -45,13 +47,7 @@ async def session_analysis_node(
             LearningSessionRepositoryImpl(session),
         )
         await analysis_service.create_analysis(
-            session_id=state["session_id"],
-            user_id=state["user_id"],
-            grammar_findings=result.grammar_findings,
-            vocabulary_findings=result.vocabulary_findings,
-            fluency_findings=result.fluency_findings,
-            task_completion=result.task_completion,
-            focus_points=result.focus_points,
+            state["session_id"], state["user_id"], result
         )
         await session.commit()
 
@@ -59,6 +55,6 @@ async def session_analysis_node(
         "skill_observations": [
             observation.model_dump() for observation in result.skill_observations
         ],
-        "persona_facts": result.new_facts,
+        "persona_facts": [persona_fact.fact for persona_fact in result.new_facts],
         "focus_points": result.focus_points,
     }

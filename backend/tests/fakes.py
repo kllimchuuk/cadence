@@ -1,9 +1,15 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from analysis.schemas import (
+    FluencyAssessment,
+    PersonaFact,
+    SessionAnalysisResult,
+    SkillObservation,
+    TaskCompletion,
+)
 from llm.client import ChatMessage
 from llm.exceptions import LLMResponseError
-from orchestration.schemas import SessionAnalysisResult, SkillObservation
 
 
 @dataclass(frozen=True)
@@ -19,11 +25,11 @@ def analysis_result(
     return SessionAnalysisResult(
         grammar_findings=[],
         vocabulary_findings=[],
-        fluency_findings={},
-        task_completion={},
+        fluency_findings=FluencyAssessment(summary="Steady, with a few pauses."),
+        task_completion=TaskCompletion(goals=[]),
         focus_points=["Practice past-tense verbs"],
         skill_observations=skill_observations or [],
-        new_facts=new_facts or [],
+        new_facts=[PersonaFact(fact=fact, evidence=fact) for fact in new_facts or []],
     )
 
 
