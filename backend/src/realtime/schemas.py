@@ -24,8 +24,13 @@ class SessionStarted(BaseModel):
     session_id: uuid.UUID
 
 
-class AssistantMessage(BaseModel):
-    type: Literal["assistant_message"] = "assistant_message"
+class AssistantDelta(BaseModel):
+    type: Literal["assistant_delta"] = "assistant_delta"
+    content: str
+
+
+class AssistantDone(BaseModel):
+    type: Literal["assistant_done"] = "assistant_done"
     content: str
 
 

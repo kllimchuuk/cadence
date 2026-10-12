@@ -16,7 +16,8 @@ from realtime.schemas import (
     CLIENT_MESSAGE_ADAPTER,
     AnalysisFailed,
     AnalysisReady,
-    AssistantMessage,
+    AssistantDelta,
+    AssistantDone,
     ClientMessage,
     EndSession,
     InvalidMessage,
@@ -136,7 +137,7 @@ class PracticeSessionSocket:
             await self._websocket.close(code=close_code)
 
     async def _exchange_turns(self, learning_session: LearningSession) -> SessionTurn:
-        turn = await self._runner.open_conversation(learning_session)
+        turn = await self._runner.open_conversation(learning_session, self._send_delta)
         await self._send_turn(turn)
 
         while turn.awaiting_user:
@@ -150,12 +151,19 @@ class PracticeSessionSocket:
         self, learning_session: LearningSession, message: ClientMessage
     ) -> SessionTurn:
         if isinstance(message, EndSession):
-            return await self._runner.end_conversation(learning_session)
-        return await self._runner.submit_turn(learning_session, message.content)
+            return await self._runner.end_conversation(
+                learning_session, self._send_delta
+            )
+        return await self._runner.submit_turn(
+            learning_session, message.content, self._send_delta
+        )
+
+    async def _send_delta(self, delta: str) -> None:
+        await self._send(AssistantDelta(content=delta))
 
     async def _send_turn(self, turn: SessionTurn) -> None:
         for content in turn.assistant_messages:
-            await self._send(AssistantMessage(content=content))
+            await self._send(AssistantDone(content=content))
         if not turn.awaiting_user:
             await self._send(SessionEnded(status=self._ended_status(turn)))
 

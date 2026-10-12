@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+import re
+import sys
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 
 from analysis.schemas import (
@@ -10,6 +12,10 @@ from analysis.schemas import (
 )
 from llm.client import ChatMessage
 from llm.exceptions import LLMResponseError
+
+
+def reply_deltas(reply: str) -> list[str]:
+    return re.findall(r"\S+\s*", reply)
 
 
 @dataclass(frozen=True)
@@ -43,11 +49,12 @@ class FakeLLMClient:
         self._analysis = analysis or analysis_result()
         self.requests: list[LLMRequest] = []
 
-    async def generate(
+    async def stream(
         self, system_instruction: str, messages: Sequence[ChatMessage]
-    ) -> str:
+    ) -> AsyncIterator[str]:
         self.requests.append(LLMRequest(system_instruction, tuple(messages)))
-        return self._reply
+        for delta in reply_deltas(self._reply):
+            yield delta
 
     async def generate_structured(
         self,
@@ -71,20 +78,21 @@ class FlakyLLMClient(FakeLLMClient):
         self._error = error
         self.call_count = 0
 
-    async def generate(
+    async def stream(
         self, system_instruction: str, messages: Sequence[ChatMessage]
-    ) -> str:
+    ) -> AsyncIterator[str]:
         self.call_count += 1
         if self.call_count <= self._fail_times:
             raise self._error
-        return await super().generate(system_instruction, messages)
+        async for delta in super().stream(system_instruction, messages):
+            yield delta
 
 
-class FailingLLMClient(FakeLLMClient):
-    async def generate(
-        self, system_instruction: str, messages: Sequence[ChatMessage]
-    ) -> str:
-        raise RuntimeError("the model is unavailable")
+class FailingLLMClient(FlakyLLMClient):
+    def __init__(self) -> None:
+        super().__init__(
+            "", fail_times=sys.maxsize, error=RuntimeError("the model is unavailable")
+        )
 
 
 class FailingAnalysisLLMClient(FakeLLMClient):

@@ -1,9 +1,10 @@
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.types import Command
+from langgraph.types import Command, StateSnapshot
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from orchestration.context import ConversationRuntimeContext
@@ -14,8 +15,10 @@ from practice.models import LearningSession, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 
-_INTERRUPT_KEY = "__interrupt__"
 _ASSISTANT_ROLE = "assistant"
+_CUSTOM_STREAM = "custom"
+
+DeltaHandler = Callable[[str], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -47,7 +50,9 @@ class SessionRunner:
             await session.commit()
             return learning_session
 
-    async def open_conversation(self, learning_session: LearningSession) -> SessionTurn:
+    async def open_conversation(
+        self, learning_session: LearningSession, on_delta: DeltaHandler
+    ) -> SessionTurn:
         return await self._advance(
             learning_session,
             initial_conversation_state(
@@ -55,19 +60,24 @@ class SessionRunner:
                 learning_session.user_id,
                 learning_session.scenario_id,
             ),
+            on_delta,
         )
 
     async def submit_turn(
-        self, learning_session: LearningSession, user_turn: str
+        self, learning_session: LearningSession, user_turn: str, on_delta: DeltaHandler
     ) -> SessionTurn:
-        return await self._advance(learning_session, Command(resume=user_turn))
+        return await self._advance(
+            learning_session, Command(resume=user_turn), on_delta
+        )
 
-    async def end_conversation(self, learning_session: LearningSession) -> SessionTurn:
+    async def end_conversation(
+        self, learning_session: LearningSession, on_delta: DeltaHandler
+    ) -> SessionTurn:
         if not await self._learner_has_spoken(learning_session):
             await self.abandon_session(learning_session)
             return SessionTurn(assistant_messages=(), awaiting_user=False)
         return await self._advance(
-            learning_session, Command(resume=END_SESSION_REQUEST)
+            learning_session, Command(resume=END_SESSION_REQUEST), on_delta
         )
 
     async def abandon_session(self, learning_session: LearningSession) -> None:
@@ -84,15 +94,21 @@ class SessionRunner:
         await self._forget(learning_session)
 
     async def _advance(
-        self, learning_session: LearningSession, graph_input: Any
+        self,
+        learning_session: LearningSession,
+        graph_input: Any,
+        on_delta: DeltaHandler,
     ) -> SessionTurn:
         delivered_entries = len(await self._checkpointed_transcript(learning_session))
-        result = await self._graph.ainvoke(
+        async for delta in self._graph.astream(
             graph_input,
             context=self._runtime_context,
             config=self._config(learning_session),
-        )
-        turn = self._turn_from(result, delivered_entries)
+            stream_mode=_CUSTOM_STREAM,
+        ):
+            await on_delta(delta)
+        snapshot = await self._graph.aget_state(self._config(learning_session))
+        turn = self._turn_from(snapshot, delivered_entries)
         if not turn.awaiting_user:
             await self._forget(learning_session)
         return turn
@@ -128,9 +144,9 @@ class SessionRunner:
         return str(learning_session.id)
 
     @staticmethod
-    def _turn_from(result: dict[str, Any], delivered_entries: int) -> SessionTurn:
-        new_entries = result["transcript"][delivered_entries:]
-        awaiting_user = _INTERRUPT_KEY in result
+    def _turn_from(snapshot: StateSnapshot, delivered_entries: int) -> SessionTurn:
+        new_entries = snapshot.values["transcript"][delivered_entries:]
+        awaiting_user = bool(snapshot.next)
         return SessionTurn(
             assistant_messages=tuple(
                 entry["content"]

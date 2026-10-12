@@ -1,12 +1,15 @@
 import asyncio
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Awaitable, Sequence
 from http import HTTPStatus
+from typing import TypeVar
 
 from google import genai
 from google.genai import errors, types
 
 from llm.client import ChatMessage, MessageRole, SchemaT
 from llm.exceptions import LLMResponseError, LLMUnavailableError
+
+ResultT = TypeVar("ResultT")
 
 _GEMINI_ROLES = {MessageRole.USER: "user", MessageRole.ASSISTANT: "model"}
 
@@ -20,7 +23,9 @@ def _to_contents(messages: Sequence[ChatMessage]) -> list[types.Content]:
     ]
 
 
-def _diagnose(response: types.GenerateContentResponse) -> str:
+def _diagnose(response: types.GenerateContentResponse | None) -> str:
+    if response is None:
+        return "empty stream"
     feedback = response.prompt_feedback
     if feedback is not None and feedback.block_reason:
         return f"prompt blocked: {feedback.block_reason}"
@@ -44,16 +49,27 @@ class GeminiClient:
         self._model = model
         self._timeout_seconds = timeout_seconds
 
-    async def generate(
+    async def stream(
         self, system_instruction: str, messages: Sequence[ChatMessage]
-    ) -> str:
-        response = await self._generate_content(
-            contents=_to_contents(messages),
-            config=types.GenerateContentConfig(system_instruction=system_instruction),
+    ) -> AsyncIterator[str]:
+        chunks = await self._call(
+            self._client.aio.models.generate_content_stream(
+                model=self._model,
+                contents=_to_contents(messages),
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction
+                ),
+            )
         )
-        if response.text is None:
-            raise LLMResponseError(f"no text ({_diagnose(response)})")
-        return response.text
+        last_chunk = None
+        produced_text = False
+        while (chunk := await self._next_chunk(chunks)) is not None:
+            last_chunk = chunk
+            if chunk.text:
+                produced_text = True
+                yield chunk.text
+        if not produced_text:
+            raise LLMResponseError(f"no text ({_diagnose(last_chunk)})")
 
     async def generate_structured(
         self,
@@ -61,13 +77,16 @@ class GeminiClient:
         messages: Sequence[ChatMessage],
         schema: type[SchemaT],
     ) -> SchemaT:
-        response = await self._generate_content(
-            contents=_to_contents(messages),
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                response_mime_type="application/json",
-                response_schema=schema,
-            ),
+        response = await self._call(
+            self._client.aio.models.generate_content(
+                model=self._model,
+                contents=_to_contents(messages),
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                ),
+            )
         )
         if response.parsed is None:
             raise LLMResponseError(
@@ -75,14 +94,18 @@ class GeminiClient:
             )
         return response.parsed
 
-    async def _generate_content(
-        self, **request: object
-    ) -> types.GenerateContentResponse:
+    async def _next_chunk(
+        self, chunks: AsyncIterator[types.GenerateContentResponse]
+    ) -> types.GenerateContentResponse | None:
+        try:
+            return await self._call(anext(chunks))
+        except StopAsyncIteration:
+            return None
+
+    async def _call(self, request: Awaitable[ResultT]) -> ResultT:
         try:
             async with asyncio.timeout(self._timeout_seconds):
-                return await self._client.aio.models.generate_content(
-                    model=self._model, **request
-                )
+                return await request
         except TimeoutError as error:
             raise LLMUnavailableError(
                 f"no response within {self._timeout_seconds}s"

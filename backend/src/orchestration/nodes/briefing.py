@@ -3,6 +3,7 @@ from langgraph.runtime import Runtime
 from orchestration.context import ConversationRuntimeContext
 from orchestration.prompts import build_persona_system_prompt, opening_messages
 from orchestration.state import ConversationState
+from orchestration.streaming import stream_reply
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
 from scenarios.config import get_scenario
@@ -20,8 +21,11 @@ async def briefing_node(
         )
 
     system_prompt = build_persona_system_prompt(scenario, persona_memory)
-    opening_line = await runtime.context.briefing_llm.generate(
-        system_prompt, opening_messages()
+    opening_line = await stream_reply(
+        runtime.context.briefing_llm,
+        system_prompt,
+        opening_messages(),
+        runtime.stream_writer,
     )
     return {
         "system_prompt": system_prompt,

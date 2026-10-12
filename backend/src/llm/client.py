@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, TypeVar
@@ -20,9 +20,9 @@ class ChatMessage:
 
 
 class LLMClient(Protocol):
-    async def generate(
+    def stream(
         self, system_instruction: str, messages: Sequence[ChatMessage]
-    ) -> str:
+    ) -> AsyncIterator[str]:
         raise NotImplementedError()
 
     async def generate_structured(

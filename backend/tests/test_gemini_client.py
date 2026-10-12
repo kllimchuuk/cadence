@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncIterator
 
 import pytest
 from google.genai import errors
@@ -48,14 +49,36 @@ class _FakeResponse:
         )
 
 
+async def _chunks(responses: list[_FakeResponse]) -> AsyncIterator[_FakeResponse]:
+    for response in responses:
+        yield response
+
+
+async def _stalling_chunks(first: _FakeResponse) -> AsyncIterator[_FakeResponse]:
+    yield first
+    await asyncio.sleep(TIMEOUT_SECONDS)
+    yield _FakeResponse(text="too late")
+
+
 class _FakeModels:
-    def __init__(self, response: _FakeResponse) -> None:
+    def __init__(
+        self,
+        response: _FakeResponse | None = None,
+        chunks: list[_FakeResponse] | None = None,
+    ) -> None:
         self._response = response
+        self._chunks = chunks or []
         self.received_kwargs: dict[str, object] | None = None
 
     async def generate_content(self, **kwargs: object) -> _FakeResponse:
         self.received_kwargs = kwargs
         return self._response
+
+    async def generate_content_stream(
+        self, **kwargs: object
+    ) -> AsyncIterator[_FakeResponse]:
+        self.received_kwargs = kwargs
+        return _chunks(self._chunks)
 
 
 class _FailingModels:
@@ -65,11 +88,21 @@ class _FailingModels:
     async def generate_content(self, **_kwargs: object) -> _FakeResponse:
         raise self._error
 
+    async def generate_content_stream(
+        self, **_kwargs: object
+    ) -> AsyncIterator[_FakeResponse]:
+        raise self._error
+
 
 class _StalledModels:
     async def generate_content(self, **_kwargs: object) -> _FakeResponse:
         await asyncio.sleep(TIMEOUT_SECONDS)
         return _FakeResponse(text="too late")
+
+    async def generate_content_stream(
+        self, **_kwargs: object
+    ) -> AsyncIterator[_FakeResponse]:
+        return _stalling_chunks(_FakeResponse(text="Hello"))
 
 
 class _FakeAio:
@@ -78,60 +111,79 @@ class _FakeAio:
 
 
 class _FakeGenaiClient:
-    def __init__(self, response: _FakeResponse) -> None:
-        self.aio = _FakeAio(_FakeModels(response))
-
-
-class _FakeGenaiClientWith:
     def __init__(self, models: object) -> None:
         self.aio = _FakeAio(models)
+
+
+def _client(models: object, timeout_seconds: float = TIMEOUT_SECONDS) -> GeminiClient:
+    return GeminiClient(_FakeGenaiClient(models), "gemini-flash", timeout_seconds)
 
 
 def _api_error(code: int) -> errors.APIError:
     return errors.APIError(code, {"error": {"status": "SOME_STATUS"}})
 
 
+async def _collect(client: GeminiClient) -> list[str]:
+    return [delta async for delta in client.stream(SYSTEM_INSTRUCTION, MESSAGES)]
+
+
 @pytest.mark.asyncio
-async def test_generate_returns_the_response_text() -> None:
-    client = GeminiClient(
-        _FakeGenaiClient(_FakeResponse(text="hello")), "gemini-flash", TIMEOUT_SECONDS
+async def test_stream_yields_the_text_of_each_chunk() -> None:
+    client = _client(
+        _FakeModels(chunks=[_FakeResponse(text="Hel"), _FakeResponse(text="lo")])
     )
 
-    assert await client.generate(SYSTEM_INSTRUCTION, MESSAGES) == "hello"
+    assert await _collect(client) == ["Hel", "lo"]
 
 
 @pytest.mark.asyncio
-async def test_generate_raises_when_gemini_returns_no_text() -> None:
-    client = GeminiClient(
-        _FakeGenaiClient(
-            _FakeResponse(text=None, candidates=[_FakeCandidate("SAFETY")])
-        ),
-        "gemini-flash",
-        TIMEOUT_SECONDS,
+async def test_stream_skips_chunks_without_text() -> None:
+    client = _client(
+        _FakeModels(
+            chunks=[
+                _FakeResponse(text="Hello"),
+                _FakeResponse(text=None, candidates=[_FakeCandidate("STOP")]),
+            ]
+        )
     )
 
-    with pytest.raises(LLMResponseError):
-        await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
+    assert await _collect(client) == ["Hello"]
 
 
 @pytest.mark.asyncio
-async def test_generate_raises_when_the_prompt_itself_was_blocked() -> None:
-    client = GeminiClient(
-        _FakeGenaiClient(_FakeResponse(text=None, block_reason="SAFETY")),
-        "gemini-flash",
-        TIMEOUT_SECONDS,
+async def test_stream_raises_when_gemini_returns_no_text() -> None:
+    client = _client(
+        _FakeModels(
+            chunks=[_FakeResponse(text=None, candidates=[_FakeCandidate("SAFETY")])]
+        )
     )
 
     with pytest.raises(LLMResponseError, match="SAFETY"):
-        await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
+        await _collect(client)
+
+
+@pytest.mark.asyncio
+async def test_stream_raises_when_the_prompt_itself_was_blocked() -> None:
+    client = _client(
+        _FakeModels(chunks=[_FakeResponse(text=None, block_reason="SAFETY")])
+    )
+
+    with pytest.raises(LLMResponseError, match="prompt blocked"):
+        await _collect(client)
+
+
+@pytest.mark.asyncio
+async def test_stream_raises_when_the_stream_is_empty() -> None:
+    client = _client(_FakeModels(chunks=[]))
+
+    with pytest.raises(LLMResponseError, match="empty stream"):
+        await _collect(client)
 
 
 @pytest.mark.asyncio
 async def test_generate_structured_returns_the_parsed_model() -> None:
     parsed = _Schema(value="x")
-    client = GeminiClient(
-        _FakeGenaiClient(_FakeResponse(parsed=parsed)), "gemini-flash", TIMEOUT_SECONDS
-    )
+    client = _client(_FakeModels(response=_FakeResponse(parsed=parsed)))
 
     result = await client.generate_structured(SYSTEM_INSTRUCTION, MESSAGES, _Schema)
 
@@ -142,12 +194,12 @@ async def test_generate_structured_returns_the_parsed_model() -> None:
 async def test_generate_structured_raises_when_gemini_returns_nothing_parseable() -> (
     None
 ):
-    client = GeminiClient(
-        _FakeGenaiClient(
-            _FakeResponse(parsed=None, candidates=[_FakeCandidate("MAX_TOKENS")])
-        ),
-        "gemini-flash",
-        TIMEOUT_SECONDS,
+    client = _client(
+        _FakeModels(
+            response=_FakeResponse(
+                parsed=None, candidates=[_FakeCandidate("MAX_TOKENS")]
+            )
+        )
     )
 
     with pytest.raises(LLMResponseError):
@@ -159,48 +211,49 @@ async def test_generate_structured_raises_when_gemini_returns_nothing_parseable(
 async def test_a_rate_limit_or_server_error_is_reported_as_unavailable(
     code: int,
 ) -> None:
-    client = GeminiClient(
-        _FakeGenaiClientWith(_FailingModels(_api_error(code))),
-        "gemini-flash",
-        TIMEOUT_SECONDS,
-    )
+    client = _client(_FailingModels(_api_error(code)))
 
     with pytest.raises(LLMUnavailableError):
-        await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
+        await _collect(client)
 
 
 @pytest.mark.asyncio
 async def test_a_client_error_is_not_reported_as_unavailable() -> None:
-    client = GeminiClient(
-        _FakeGenaiClientWith(_FailingModels(_api_error(400))),
-        "gemini-flash",
-        TIMEOUT_SECONDS,
-    )
+    client = _client(_FailingModels(_api_error(400)))
 
     with pytest.raises(errors.APIError):
-        await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
+        await _collect(client)
 
 
 @pytest.mark.asyncio
-async def test_a_call_that_outlives_the_timeout_is_reported_as_unavailable() -> None:
-    client = GeminiClient(
-        _FakeGenaiClientWith(_StalledModels()), "gemini-flash", SHORT_TIMEOUT_SECONDS
-    )
+async def test_a_structured_call_that_outlives_the_timeout_is_unavailable() -> None:
+    client = _client(_StalledModels(), SHORT_TIMEOUT_SECONDS)
 
     with pytest.raises(LLMUnavailableError):
         await client.generate_structured(SYSTEM_INSTRUCTION, MESSAGES, _Schema)
 
 
 @pytest.mark.asyncio
+async def test_a_stream_that_stalls_between_chunks_is_unavailable() -> None:
+    client = _client(_StalledModels(), SHORT_TIMEOUT_SECONDS)
+    received = []
+
+    with pytest.raises(LLMUnavailableError):
+        async for delta in client.stream(SYSTEM_INSTRUCTION, MESSAGES):
+            received.append(delta)
+
+    assert received == ["Hello"]
+
+
+@pytest.mark.asyncio
 async def test_messages_keep_their_roles_and_the_system_instruction_is_separate() -> (
     None
 ):
-    genai_client = _FakeGenaiClient(_FakeResponse(text="hello"))
-    client = GeminiClient(genai_client, "gemini-flash", TIMEOUT_SECONDS)
+    models = _FakeModels(chunks=[_FakeResponse(text="hello")])
 
-    await client.generate(SYSTEM_INSTRUCTION, MESSAGES)
+    await _collect(_client(models))
 
-    request = genai_client.aio.models.received_kwargs
+    request = models.received_kwargs
     assert [content.role for content in request["contents"]] == [
         "user",
         "model",

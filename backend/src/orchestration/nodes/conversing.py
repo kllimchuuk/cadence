@@ -4,6 +4,7 @@ from langgraph.types import interrupt
 from orchestration.context import ConversationRuntimeContext
 from orchestration.prompts import conversation_messages
 from orchestration.state import ConversationState
+from orchestration.streaming import stream_reply
 
 MAX_CONVERSATION_TURNS = 12
 END_SESSION_REQUEST = {"type": "end_session"}
@@ -16,8 +17,11 @@ async def conversing_node(
     if user_turn == END_SESSION_REQUEST:
         return {"should_exit": True}
 
-    assistant_reply = await runtime.context.conversing_llm.generate(
-        state["system_prompt"], conversation_messages(state["transcript"], user_turn)
+    assistant_reply = await stream_reply(
+        runtime.context.conversing_llm,
+        state["system_prompt"],
+        conversation_messages(state["transcript"], user_turn),
+        runtime.stream_writer,
     )
 
     turn_count = state["turn_count"] + 1
