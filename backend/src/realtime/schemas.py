@@ -24,8 +24,13 @@ class SessionStarted(BaseModel):
     session_id: uuid.UUID
 
 
-class AssistantMessage(BaseModel):
-    type: Literal["assistant_message"] = "assistant_message"
+class AssistantDelta(BaseModel):
+    type: Literal["assistant_delta"] = "assistant_delta"
+    content: str
+
+
+class AssistantDone(BaseModel):
+    type: Literal["assistant_done"] = "assistant_done"
     content: str
 
 
@@ -35,4 +40,13 @@ class InvalidMessage(BaseModel):
 
 class SessionEnded(BaseModel):
     type: Literal["session_ended"] = "session_ended"
+    status: Literal["completed", "incomplete"]
+
+
+class AnalysisReady(BaseModel):
+    type: Literal["analysis_ready"] = "analysis_ready"
     focus_points: list[str]
+
+
+class AnalysisFailed(BaseModel):
+    type: Literal["analysis_failed"] = "analysis_failed"

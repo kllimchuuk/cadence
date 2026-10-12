@@ -16,10 +16,19 @@ class SessionStatus(StrEnum):
     INCOMPLETE = "incomplete"
 
 
+class AnalysisStatus(StrEnum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class LearningSession(Base):
     __tablename__ = "learning_sessions"
     __table_args__ = (
         enum_check("status", "ck_learning_sessions_status", SessionStatus),
+        enum_check(
+            "analysis_status", "ck_learning_sessions_analysis_status", AnalysisStatus
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -35,6 +44,7 @@ class LearningSession(Base):
         server_default=SessionStatus.IN_PROGRESS,
     )
     transcript: Mapped[list | None] = mapped_column(JSONB)
+    analysis_status: Mapped[str | None] = mapped_column(String(20))
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

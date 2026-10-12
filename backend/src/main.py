@@ -16,8 +16,8 @@ from core.database import build_engine, build_session_factory, psycopg_dsn
 from core.exceptions import AppException
 from llm.factory import LLMClientFactory
 from orchestration.checkpointer import prepare_checkpointer
-from orchestration.graph import build_session_graph
-from practice.router import router as practice_router
+from orchestration.graph import build_analysis_graph, build_conversation_graph
+from realtime.router import router as realtime_router
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             kwargs={"autocommit": True},
         ) as pool:
             checkpointer = await prepare_checkpointer(pool)
-            app.state.session_graph = build_session_graph(checkpointer=checkpointer)
+            app.state.conversation_graph = build_conversation_graph(
+                checkpointer=checkpointer
+            )
+            app.state.analysis_graph = build_analysis_graph()
             yield
     finally:
         await app.state.db_engine.dispose()
@@ -74,7 +77,9 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     app.state.db_engine = build_engine(app_settings.DATABASE_URL)
     app.state.session_factory = build_session_factory(app.state.db_engine)
     app.state.oauth = build_google_oauth(app_settings)
-    app.state.llm_client_factory = LLMClientFactory(app_settings.GEMINI_API_KEY)
+    app.state.llm_client_factory = LLMClientFactory(
+        app_settings.GEMINI_API_KEY, app_settings.LLM_TIMEOUT_SECONDS
+    )
 
     app.add_exception_handler(AppException, domain_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
@@ -95,7 +100,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(auth_router)
-    app.include_router(practice_router)
+    app.include_router(realtime_router)
 
     return app
 

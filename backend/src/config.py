@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     GOOGLE_SERVER_METADATA_URL: str
     GEMINI_API_KEY: str
     GEMINI_MODEL: str
+    LLM_TIMEOUT_SECONDS: float
     CHECKPOINTER_POOL_MAX_SIZE: int = 10
 
     @model_validator(mode="after")

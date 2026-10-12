@@ -1,15 +1,15 @@
 import pytest
 from pydantic import ValidationError
 
-from orchestration.schemas import SessionAnalysisResult
+from analysis.schemas import SessionAnalysisResult
 
 
 def _kwargs(**overrides: object) -> dict[str, object]:
     base = {
         "grammar_findings": [],
         "vocabulary_findings": [],
-        "fluency_findings": {},
-        "task_completion": {},
+        "fluency_findings": {"summary": "Steady pace."},
+        "task_completion": {"goals": []},
         "focus_points": ["Practice past-tense verbs"],
         "skill_observations": [],
         "new_facts": [],
@@ -36,3 +36,20 @@ def test_zero_focus_points_is_rejected() -> None:
 def test_more_than_three_focus_points_is_rejected() -> None:
     with pytest.raises(ValidationError):
         SessionAnalysisResult(**_kwargs(focus_points=["a", "b", "c", "d"]))
+
+
+def test_a_skill_observation_without_evidence_is_rejected() -> None:
+    observation = {
+        "category": "grammar",
+        "skill_key": "past_simple",
+        "outcome": "error",
+        "note": "Used present tense for a past event.",
+    }
+
+    with pytest.raises(ValidationError):
+        SessionAnalysisResult(**_kwargs(skill_observations=[observation]))
+
+
+def test_a_persona_fact_without_evidence_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        SessionAnalysisResult(**_kwargs(new_facts=[{"fact": "Moving into AI."}]))

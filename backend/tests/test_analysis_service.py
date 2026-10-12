@@ -4,11 +4,11 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from analysis.exceptions import InvalidFocusPointCountError
 from analysis.repository import SessionAnalysisRepositoryImpl
 from analysis.service import AnalysisService
 from practice.exceptions import LearningSessionNotFoundError
 from practice.repository import LearningSessionRepositoryImpl
+from tests.fakes import analysis_result
 from users.repository import UserRepositoryImpl
 
 
@@ -51,27 +51,11 @@ async def session_id(session: AsyncSession, user_id: uuid.UUID) -> uuid.UUID:
     return record.id
 
 
-def analysis_kwargs(
-    session_id: uuid.UUID, user_id: uuid.UUID, focus_points: list[object] | None = None
-) -> dict[str, object]:
-    return {
-        "session_id": session_id,
-        "user_id": user_id,
-        "grammar_findings": [{"error": "subject-verb agreement"}],
-        "vocabulary_findings": [{"gap": "filler words"}],
-        "fluency_findings": {"words_per_minute": 110},
-        "task_completion": {"introduced_self": True},
-        "focus_points": (
-            focus_points if focus_points is not None else ["Practice past tense"]
-        ),
-    }
-
-
 @pytest.mark.asyncio
 async def test_an_analysis_is_created_and_read_back(
     service: AnalysisService, session_id: uuid.UUID, user_id: uuid.UUID
 ) -> None:
-    created = await service.create_analysis(**analysis_kwargs(session_id, user_id))
+    created = await service.create_analysis(session_id, user_id, analysis_result())
 
     found = await service.get_analysis(session_id, user_id)
 
@@ -84,7 +68,7 @@ async def test_creating_for_an_unknown_session_raises_not_found(
     service: AnalysisService, user_id: uuid.UUID
 ) -> None:
     with pytest.raises(LearningSessionNotFoundError):
-        await service.create_analysis(**analysis_kwargs(uuid.uuid4(), user_id))
+        await service.create_analysis(uuid.uuid4(), user_id, analysis_result())
 
 
 @pytest.mark.asyncio
@@ -95,41 +79,22 @@ async def test_creating_for_another_users_session_raises_not_found(
     other_user_id: uuid.UUID,
 ) -> None:
     with pytest.raises(LearningSessionNotFoundError):
-        await service.create_analysis(**analysis_kwargs(session_id, other_user_id))
+        await service.create_analysis(session_id, other_user_id, analysis_result())
 
 
 @pytest.mark.asyncio
 async def test_creating_twice_for_the_same_session_is_a_no_op(
     service: AnalysisService, session_id: uuid.UUID, user_id: uuid.UUID
 ) -> None:
-    first = await service.create_analysis(**analysis_kwargs(session_id, user_id))
+    first = await service.create_analysis(session_id, user_id, analysis_result())
 
-    second = await service.create_analysis(
-        **analysis_kwargs(session_id, user_id, focus_points=["Different point"])
+    different = analysis_result().model_copy(
+        update={"focus_points": ["Different point"]}
     )
+    second = await service.create_analysis(session_id, user_id, different)
 
     assert second.id == first.id
-    assert second.focus_points == ["Practice past tense"]
-
-
-@pytest.mark.asyncio
-async def test_creating_with_no_focus_points_is_rejected(
-    service: AnalysisService, session_id: uuid.UUID, user_id: uuid.UUID
-) -> None:
-    with pytest.raises(InvalidFocusPointCountError):
-        await service.create_analysis(
-            **analysis_kwargs(session_id, user_id, focus_points=[])
-        )
-
-
-@pytest.mark.asyncio
-async def test_creating_with_too_many_focus_points_is_rejected(
-    service: AnalysisService, session_id: uuid.UUID, user_id: uuid.UUID
-) -> None:
-    with pytest.raises(InvalidFocusPointCountError):
-        await service.create_analysis(
-            **analysis_kwargs(session_id, user_id, focus_points=["a", "b", "c", "d"])
-        )
+    assert second.focus_points == ["Practice past-tense verbs"]
 
 
 @pytest.mark.asyncio
@@ -145,7 +110,7 @@ async def test_listing_analyses_only_returns_the_users_own(
     session_id: uuid.UUID,
     user_id: uuid.UUID,
 ) -> None:
-    await service.create_analysis(**analysis_kwargs(session_id, user_id))
+    await service.create_analysis(session_id, user_id, analysis_result())
 
     found = await service.list_analyses(user_id)
 
