@@ -101,16 +101,16 @@ class PracticeSessionSocket:
             )
             await self._abandon_and_close(learning_session, INTERNAL_ERROR_CLOSE_CODE)
         else:
-            if final_turn.completed:
-                await self._report_analysis(learning_session)
-            await self._close(status.WS_1000_NORMAL_CLOSURE)
+            await self._finish(learning_session, final_turn)
 
-    async def _report_analysis(self, learning_session: LearningSession) -> None:
-        report = await self._analysis_report(learning_session)
-        try:
-            await self._send(report)
-        except WebSocketDisconnect:
-            return
+    async def _finish(
+        self, learning_session: LearningSession, final_turn: SessionTurn
+    ) -> None:
+        for message in self._turn_messages(final_turn):
+            await self._deliver(message)
+        if final_turn.completed:
+            await self._deliver(await self._analysis_report(learning_session))
+        await self._close(status.WS_1000_NORMAL_CLOSURE)
 
     async def _analysis_report(self, learning_session: LearningSession) -> BaseModel:
         try:
@@ -138,12 +138,12 @@ class PracticeSessionSocket:
 
     async def _exchange_turns(self, learning_session: LearningSession) -> SessionTurn:
         turn = await self._runner.open_conversation(learning_session, self._send_delta)
-        await self._send_turn(turn)
 
         while turn.awaiting_user:
-            message = await self._receive_client_message()
-            turn = await self._respond_to(learning_session, message)
-            await self._send_turn(turn)
+            for message in self._turn_messages(turn):
+                await self._send(message)
+            client_message = await self._receive_client_message()
+            turn = await self._respond_to(learning_session, client_message)
 
         return turn
 
@@ -161,11 +161,14 @@ class PracticeSessionSocket:
     async def _send_delta(self, delta: str) -> None:
         await self._send(AssistantDelta(content=delta))
 
-    async def _send_turn(self, turn: SessionTurn) -> None:
-        for content in turn.assistant_messages:
-            await self._send(AssistantDone(content=content))
+    @classmethod
+    def _turn_messages(cls, turn: SessionTurn) -> list[BaseModel]:
+        messages: list[BaseModel] = [
+            AssistantDone(content=content) for content in turn.assistant_messages
+        ]
         if not turn.awaiting_user:
-            await self._send(SessionEnded(status=self._ended_status(turn)))
+            messages.append(SessionEnded(status=cls._ended_status(turn)))
+        return messages
 
     @staticmethod
     def _ended_status(turn: SessionTurn) -> SessionStatus:
@@ -188,3 +191,11 @@ class PracticeSessionSocket:
 
     async def _send(self, message: BaseModel) -> None:
         await self._websocket.send_json(message.model_dump(mode="json"))
+
+    async def _deliver(self, message: BaseModel) -> None:
+        if self._websocket.application_state != WebSocketState.CONNECTED:
+            return
+        try:
+            await self._send(message)
+        except WebSocketDisconnect:
+            return

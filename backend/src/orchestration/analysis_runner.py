@@ -60,9 +60,20 @@ class SessionAnalysisRunner:
     async def _record(
         self, learning_session: LearningSession, analysis_status: AnalysisStatus
     ) -> None:
-        async with self._session_factory() as session:
-            practice_service = PracticeService(LearningSessionRepositoryImpl(session))
-            await practice_service.record_analysis_status(
-                learning_session.id, learning_session.user_id, analysis_status
+        try:
+            async with self._session_factory() as session:
+                practice_service = PracticeService(
+                    LearningSessionRepositoryImpl(session)
+                )
+                await practice_service.record_analysis_status(
+                    learning_session.id, learning_session.user_id, analysis_status
+                )
+                await session.commit()
+        except Exception:
+            logger.exception(
+                "Could not record the analysis status",
+                extra={
+                    "session_id": str(learning_session.id),
+                    "analysis_status": analysis_status,
+                },
             )
-            await session.commit()

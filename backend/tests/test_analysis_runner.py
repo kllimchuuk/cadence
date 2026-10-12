@@ -134,3 +134,35 @@ async def test_a_failed_analysis_leaves_the_conversation_completed(
 
     reloaded = await _reloaded(session, practice_service, completed_session)
     assert reloaded.status == SessionStatus.COMPLETED
+
+
+async def _unrecordable_status(*args: object) -> None:
+    raise ConnectionError("database unavailable")
+
+
+@pytest.mark.asyncio
+async def test_an_unrecordable_status_does_not_hide_a_successful_analysis(
+    session_factory: async_sessionmaker[AsyncSession],
+    completed_session: LearningSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(PracticeService, "record_analysis_status", _unrecordable_status)
+
+    focus_points = await _runner(session_factory, FakeLLMClient()).analyse(
+        completed_session
+    )
+
+    assert focus_points == ("Practice past-tense verbs",)
+
+
+@pytest.mark.asyncio
+async def test_an_unrecordable_status_still_reports_a_failed_analysis(
+    session_factory: async_sessionmaker[AsyncSession],
+    completed_session: LearningSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(PracticeService, "record_analysis_status", _unrecordable_status)
+    runner = _runner(session_factory, FailingAnalysisLLMClient())
+
+    with pytest.raises(SessionAnalysisFailedError):
+        await runner.analyse(completed_session)
