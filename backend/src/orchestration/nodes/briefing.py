@@ -1,15 +1,15 @@
 from langgraph.runtime import Runtime
 
-from orchestration.context import SessionRuntimeContext
+from orchestration.context import ConversationRuntimeContext
 from orchestration.prompts import build_persona_system_prompt, opening_messages
-from orchestration.state import SessionState
+from orchestration.state import ConversationState
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
 from scenarios.config import get_scenario
 
 
 async def briefing_node(
-    state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
+    state: ConversationState, *, runtime: Runtime[ConversationRuntimeContext]
 ) -> dict[str, object]:
     scenario = get_scenario(state["scenario_id"])
 

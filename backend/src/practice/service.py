@@ -9,7 +9,7 @@ from practice.exceptions import (
     LearningSessionNotFoundError,
     TooManyActiveSessionsError,
 )
-from practice.models import LearningSession, SessionStatus
+from practice.models import AnalysisStatus, LearningSession, SessionStatus
 from practice.repository import LearningSessionRepository, get_practice_repository
 from scenarios.config import get_scenario
 
@@ -52,7 +52,18 @@ class PracticeService:
         record = await self.get_session(session_id, user_id)
         if record.ended_at is not None:
             return record
-        return await self._repository.finish(record, status, transcript)
+        return await self._repository.finish(
+            record, status, transcript, self._initial_analysis_status(status)
+        )
+
+    async def record_analysis_status(
+        self,
+        session_id: uuid.UUID,
+        user_id: uuid.UUID,
+        analysis_status: AnalysisStatus,
+    ) -> LearningSession:
+        record = await self.get_session(session_id, user_id)
+        return await self._repository.update_analysis_status(record, analysis_status)
 
     async def _require_session_capacity(self, user_id: uuid.UUID) -> None:
         started_after = datetime.now(UTC) - ACTIVE_SESSION_WINDOW
@@ -61,6 +72,12 @@ class PracticeService:
         )
         if active_sessions >= MAX_ACTIVE_SESSIONS_PER_USER:
             raise TooManyActiveSessionsError()
+
+    @staticmethod
+    def _initial_analysis_status(status: SessionStatus) -> AnalysisStatus | None:
+        if status == SessionStatus.COMPLETED:
+            return AnalysisStatus.PENDING
+        return None
 
     @staticmethod
     def _require_finishable_status(status: SessionStatus) -> None:

@@ -1,4 +1,4 @@
-"""add skill observations and new facts to session analyses
+"""add analysis status to learning sessions and evidence fields to analyses
 
 Revision ID: e407f34375e5
 Revises: cd5634f0fa16
@@ -21,6 +21,15 @@ _NEW_ANALYSIS_COLUMNS = ("skill_observations", "new_facts")
 
 
 def upgrade() -> None:
+    op.add_column(
+        "learning_sessions",
+        sa.Column("analysis_status", sa.String(length=20), nullable=True),
+    )
+    op.create_check_constraint(
+        "ck_learning_sessions_analysis_status",
+        "learning_sessions",
+        "analysis_status IN ('pending', 'completed', 'failed')",
+    )
     for column in _NEW_ANALYSIS_COLUMNS:
         op.add_column(
             "session_analyses",
@@ -37,3 +46,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     for column in reversed(_NEW_ANALYSIS_COLUMNS):
         op.drop_column("session_analyses", column)
+    op.drop_constraint(
+        "ck_learning_sessions_analysis_status", "learning_sessions", type_="check"
+    )
+    op.drop_column("learning_sessions", "analysis_status")

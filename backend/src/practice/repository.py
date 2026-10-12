@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
-from practice.models import LearningSession, SessionStatus
+from practice.models import AnalysisStatus, LearningSession, SessionStatus
 
 
 class LearningSessionRepository(ABC):
@@ -38,6 +38,13 @@ class LearningSessionRepository(ABC):
         record: LearningSession,
         status: SessionStatus,
         transcript: list[object],
+        analysis_status: AnalysisStatus | None,
+    ) -> LearningSession:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def update_analysis_status(
+        self, record: LearningSession, analysis_status: AnalysisStatus
     ) -> LearningSession:
         raise NotImplementedError()
 
@@ -86,10 +93,19 @@ class LearningSessionRepositoryImpl(LearningSessionRepository):
         record: LearningSession,
         status: SessionStatus,
         transcript: list[object],
+        analysis_status: AnalysisStatus | None,
     ) -> LearningSession:
         record.status = status
         record.transcript = transcript
+        record.analysis_status = analysis_status
         record.ended_at = datetime.now(UTC)
+        await self._session.flush()
+        return record
+
+    async def update_analysis_status(
+        self, record: LearningSession, analysis_status: AnalysisStatus
+    ) -> LearningSession:
+        record.analysis_status = analysis_status
         await self._session.flush()
         return record
 

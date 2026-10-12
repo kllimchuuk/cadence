@@ -6,10 +6,10 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from orchestration.context import SessionRuntimeContext
+from orchestration.context import ConversationRuntimeContext
 from orchestration.graph import RECURSION_LIMIT_PER_TURN
 from orchestration.nodes.conversing import END_SESSION_REQUEST
-from orchestration.state import initial_session_state
+from orchestration.state import initial_conversation_state
 from practice.models import LearningSession, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
@@ -22,14 +22,14 @@ _ASSISTANT_ROLE = "assistant"
 class SessionTurn:
     assistant_messages: tuple[str, ...]
     awaiting_user: bool
-    focus_points: tuple[str, ...] = ()
+    completed: bool = False
 
 
 class SessionRunner:
     def __init__(
         self,
         session_factory: async_sessionmaker[AsyncSession],
-        runtime_context: SessionRuntimeContext,
+        runtime_context: ConversationRuntimeContext,
         graph: CompiledStateGraph,
     ) -> None:
         self._session_factory = session_factory
@@ -50,7 +50,7 @@ class SessionRunner:
     async def open_conversation(self, learning_session: LearningSession) -> SessionTurn:
         return await self._advance(
             learning_session,
-            initial_session_state(
+            initial_conversation_state(
                 learning_session.id,
                 learning_session.user_id,
                 learning_session.scenario_id,
@@ -138,5 +138,5 @@ class SessionRunner:
                 if entry["role"] == _ASSISTANT_ROLE
             ),
             awaiting_user=awaiting_user,
-            focus_points=tuple(result["focus_points"]),
+            completed=not awaiting_user,
         )

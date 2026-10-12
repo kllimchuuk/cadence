@@ -6,8 +6,8 @@ from analysis.repository import SessionAnalysisRepositoryImpl
 from analysis.schemas import SessionAnalysisResult
 from analysis.service import AnalysisService
 from llm.client import ChatMessage, MessageRole
-from orchestration.context import SessionRuntimeContext
-from orchestration.state import SessionState
+from orchestration.context import AnalysisRuntimeContext
+from orchestration.state import AnalysisState
 from practice.repository import LearningSessionRepositoryImpl
 from scenarios.config import Scenario, get_scenario
 
@@ -32,7 +32,7 @@ def _transcript_messages(transcript: list[dict[str, str]]) -> list[ChatMessage]:
 
 
 async def session_analysis_node(
-    state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
+    state: AnalysisState, *, runtime: Runtime[AnalysisRuntimeContext]
 ) -> dict[str, object]:
     scenario = get_scenario(state["scenario_id"])
     result = await runtime.context.session_analysis_llm.generate_structured(

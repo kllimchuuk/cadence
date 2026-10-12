@@ -87,6 +87,16 @@ class FailingLLMClient(FakeLLMClient):
         raise RuntimeError("the model is unavailable")
 
 
+class FailingAnalysisLLMClient(FakeLLMClient):
+    async def generate_structured(
+        self,
+        system_instruction: str,
+        messages: Sequence[ChatMessage],
+        schema: type,
+    ) -> SessionAnalysisResult:
+        raise RuntimeError("the analysis model is unavailable")
+
+
 class FakeLLMClientFactory:
     def __init__(self, client: FakeLLMClient) -> None:
         self._client = client

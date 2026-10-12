@@ -1,7 +1,7 @@
 from langgraph.runtime import Runtime
 
-from orchestration.context import SessionRuntimeContext
-from orchestration.state import SessionState
+from orchestration.context import AnalysisRuntimeContext
+from orchestration.state import AnalysisState
 from practice.repository import LearningSessionRepositoryImpl
 from weaknesses.models import WeaknessCategory
 from weaknesses.repository import WeaknessRecordRepositoryImpl
@@ -9,7 +9,7 @@ from weaknesses.service import WeaknessService
 
 
 async def weakness_state_update_node(
-    state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
+    state: AnalysisState, *, runtime: Runtime[AnalysisRuntimeContext]
 ) -> dict[str, object]:
     async with runtime.context.session_factory() as session:
         weakness_service = WeaknessService(

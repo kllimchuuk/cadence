@@ -5,11 +5,11 @@ import pytest_asyncio
 from langgraph.checkpoint.memory import InMemorySaver
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from orchestration.context import SessionRuntimeContext
-from orchestration.graph import build_session_graph
+from orchestration.context import ConversationRuntimeContext
+from orchestration.graph import build_conversation_graph
 from orchestration.nodes import conversing as conversing_node_module
-from orchestration.state import initial_session_state
-from practice.models import SessionStatus
+from orchestration.state import initial_conversation_state
+from practice.models import AnalysisStatus, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
@@ -43,17 +43,16 @@ async def test_finish_session_closes_a_real_learning_session(
     learning_session = await practice_service.start_session(user_id, "job_interview")
     session_id = learning_session.id
 
-    graph = build_session_graph(checkpointer=InMemorySaver())
-    context = SessionRuntimeContext(
+    graph = build_conversation_graph(checkpointer=InMemorySaver())
+    context = ConversationRuntimeContext(
         briefing_llm=FakeLLMClient("Hi, thanks for joining!"),
         conversing_llm=FakeLLMClient("That's a great start — tell me more."),
-        session_analysis_llm=FakeLLMClient(),
         session_factory=session_factory,
     )
 
     await run_graph_to_completion(
         graph,
-        initial_session_state(session_id, user_id, "job_interview"),
+        initial_conversation_state(session_id, user_id, "job_interview"),
         context,
         {"configurable": {"thread_id": str(uuid.uuid4())}},
         user_turns=["Sure."],
@@ -64,3 +63,4 @@ async def test_finish_session_closes_a_real_learning_session(
     assert finished.status == SessionStatus.COMPLETED
     assert finished.ended_at is not None
     assert finished.transcript is not None and len(finished.transcript) > 0
+    assert finished.analysis_status == AnalysisStatus.PENDING

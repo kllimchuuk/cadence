@@ -35,4 +35,13 @@ class InvalidMessage(BaseModel):
 
 class SessionEnded(BaseModel):
     type: Literal["session_ended"] = "session_ended"
+    status: Literal["completed", "incomplete"]
+
+
+class AnalysisReady(BaseModel):
+    type: Literal["analysis_ready"] = "analysis_ready"
     focus_points: list[str]
+
+
+class AnalysisFailed(BaseModel):
+    type: Literal["analysis_failed"] = "analysis_failed"

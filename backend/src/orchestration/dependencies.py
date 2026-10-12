@@ -10,24 +10,41 @@ from config import Settings
 from core.database import get_session_factory
 from llm.dependencies import get_llm_client_factory
 from llm.factory import LLMClientFactory
-from orchestration.context import SessionRuntimeContext
+from orchestration.analysis_runner import SessionAnalysisRunner
+from orchestration.context import AnalysisRuntimeContext, ConversationRuntimeContext
 from orchestration.session_runner import SessionRunner
 
 
-def get_session_graph(conn: HTTPConnection) -> CompiledStateGraph:
-    return conn.app.state.session_graph
+def get_conversation_graph(conn: HTTPConnection) -> CompiledStateGraph:
+    return conn.app.state.conversation_graph
 
 
-def get_session_runtime_context(
+def get_analysis_graph(conn: HTTPConnection) -> CompiledStateGraph:
+    return conn.app.state.analysis_graph
+
+
+def get_conversation_runtime_context(
     llm_factory: Annotated[LLMClientFactory, Depends(get_llm_client_factory)],
     session_factory: Annotated[
         async_sessionmaker[AsyncSession], Depends(get_session_factory)
     ],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> SessionRuntimeContext:
-    return SessionRuntimeContext(
+) -> ConversationRuntimeContext:
+    return ConversationRuntimeContext(
         briefing_llm=llm_factory.create(settings.GEMINI_MODEL),
         conversing_llm=llm_factory.create(settings.GEMINI_MODEL),
+        session_factory=session_factory,
+    )
+
+
+def get_analysis_runtime_context(
+    llm_factory: Annotated[LLMClientFactory, Depends(get_llm_client_factory)],
+    session_factory: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_session_factory)
+    ],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AnalysisRuntimeContext:
+    return AnalysisRuntimeContext(
         session_analysis_llm=llm_factory.create(settings.GEMINI_MODEL),
         session_factory=session_factory,
     )
@@ -38,8 +55,20 @@ def get_session_runner(
         async_sessionmaker[AsyncSession], Depends(get_session_factory)
     ],
     runtime_context: Annotated[
-        SessionRuntimeContext, Depends(get_session_runtime_context)
+        ConversationRuntimeContext, Depends(get_conversation_runtime_context)
     ],
-    graph: Annotated[CompiledStateGraph, Depends(get_session_graph)],
+    graph: Annotated[CompiledStateGraph, Depends(get_conversation_graph)],
 ) -> SessionRunner:
     return SessionRunner(session_factory, runtime_context, graph)
+
+
+def get_session_analysis_runner(
+    session_factory: Annotated[
+        async_sessionmaker[AsyncSession], Depends(get_session_factory)
+    ],
+    runtime_context: Annotated[
+        AnalysisRuntimeContext, Depends(get_analysis_runtime_context)
+    ],
+    graph: Annotated[CompiledStateGraph, Depends(get_analysis_graph)],
+) -> SessionAnalysisRunner:
+    return SessionAnalysisRunner(session_factory, runtime_context, graph)

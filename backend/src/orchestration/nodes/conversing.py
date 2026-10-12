@@ -1,16 +1,16 @@
 from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
-from orchestration.context import SessionRuntimeContext
+from orchestration.context import ConversationRuntimeContext
 from orchestration.prompts import conversation_messages
-from orchestration.state import SessionState
+from orchestration.state import ConversationState
 
 MAX_CONVERSATION_TURNS = 12
 END_SESSION_REQUEST = {"type": "end_session"}
 
 
 async def conversing_node(
-    state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
+    state: ConversationState, *, runtime: Runtime[ConversationRuntimeContext]
 ) -> dict[str, object]:
     user_turn = interrupt({"awaiting": "user_turn"})
     if user_turn == END_SESSION_REQUEST:
