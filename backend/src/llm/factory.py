@@ -2,6 +2,8 @@ from google import genai
 
 from llm.client import LLMClient
 from llm.gemini_client import GeminiClient
+from llm.gemini_embedding_client import GeminiEmbeddingClient
+from rag.embeddings import EmbeddingClient
 
 
 class LLMClientFactory:
@@ -11,3 +13,6 @@ class LLMClientFactory:
 
     def create(self, model: str) -> LLMClient:
         return GeminiClient(self._client, model, self._timeout_seconds)
+
+    def create_embedding_client(self, model: str) -> EmbeddingClient:
+        return GeminiEmbeddingClient(self._client, model, self._timeout_seconds)

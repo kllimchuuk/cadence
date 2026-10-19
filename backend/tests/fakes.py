@@ -1,3 +1,5 @@
+import hashlib
+import math
 import re
 import sys
 from collections.abc import AsyncIterator, Sequence
@@ -12,6 +14,7 @@ from analysis.schemas import (
 )
 from llm.client import ChatMessage
 from llm.exceptions import LLMResponseError
+from rag.embeddings import EMBEDDING_DIMENSIONS, EmbeddingDocument
 
 
 def reply_deltas(reply: str) -> list[str]:
@@ -111,3 +114,28 @@ class FakeLLMClientFactory:
 
     def create(self, _model: str) -> FakeLLMClient:
         return self._client
+
+
+def fake_embedding(text: str) -> list[float]:
+    vector = [0.0] * EMBEDDING_DIMENSIONS
+    for word in re.findall(r"[a-z']+", text.lower()):
+        digest = hashlib.sha256(word.encode()).digest()
+        vector[int.from_bytes(digest[:4]) % EMBEDDING_DIMENSIONS] += 1.0
+    norm = math.sqrt(sum(value * value for value in vector)) or 1.0
+    return [value / norm for value in vector]
+
+
+class FakeEmbeddingClient:
+    def __init__(self) -> None:
+        self.document_calls: list[tuple[EmbeddingDocument, ...]] = []
+        self.queries: list[str] = []
+
+    async def embed_documents(
+        self, documents: Sequence[EmbeddingDocument]
+    ) -> list[list[float]]:
+        self.document_calls.append(tuple(documents))
+        return [fake_embedding(f"{item.title or ''} {item.text}") for item in documents]
+
+    async def embed_query(self, text: str) -> list[float]:
+        self.queries.append(text)
+        return fake_embedding(text)
