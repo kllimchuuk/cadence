@@ -14,3 +14,4 @@ psycopg[binary]>=3.3.5
 psycopg-pool>=3.3.1
 google-genai>=2.25.0
 pgvector>=0.5.1
+PyYAML>=6.0

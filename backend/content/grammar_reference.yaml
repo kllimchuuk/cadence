@@ -1,0 +1,159 @@
+- skill_key: articles
+  title: Articles (a, an, the, no article)
+  content: >-
+    Use "a/an" for a singular countable noun mentioned for the first time or
+    when any one will do ("I have a meeting"). Use "the" when both speakers
+    know which one ("the meeting at three"), or when there is only one ("the
+    internet"). Use no article for plural or uncountable nouns in general
+    ("I like music", "Developers need coffee"). Common error: dropping the
+    article before a singular countable noun, "I work as developer" instead
+    of "I work as a developer".
+- skill_key: present_perfect_vs_past_simple
+  title: Present perfect vs past simple
+  content: >-
+    Use past simple for a finished action at a finished time ("I moved to
+    Berlin in 2022", "I finished it yesterday"). Use present perfect
+    (have/has + past participle) for experience or a result connected to now,
+    with no finished time ("I have worked with Python for five years", "I
+    have just finished"). Never combine present perfect with a finished time
+    word: "I have seen him yesterday" is wrong, say "I saw him yesterday".
+- skill_key: irregular_past_forms
+  title: Irregular past simple and participle forms
+  content: >-
+    Many common verbs do not take -ed. Learn the forms: go-went-gone,
+    do-did-done, see-saw-seen, take-took-taken, write-wrote-written,
+    buy-bought-bought, build-built-built, run-ran-run. Common errors are
+    regularising ("I buyed", "he teached") and using the base form in the
+    past ("Yesterday I go to the office" instead of "I went"). The past
+    simple has no -s or auxiliary in affirmative sentences.
+- skill_key: subject_verb_agreement
+  title: Subject-verb agreement
+  content: >-
+    In the present simple, add -s/-es to the verb with he, she, it and
+    singular nouns: "She works", "The server restarts". Do not add -s to the
+    verb after I, you, we, they or plural nouns. With do/does, the main verb
+    stays in the base form: "Does she work here?", not "Does she works".
+    "Be" agrees too: "The tests are failing", "The team is ready".
+- skill_key: prepositions_of_time
+  title: Prepositions of time (at, on, in)
+  content: >-
+    Use "at" for exact times and fixed points ("at 5 o'clock", "at night",
+    "at the weekend" in British English). Use "on" for days and dates ("on
+    Monday", "on 14 March", "on my birthday"). Use "in" for longer periods
+    ("in the morning", "in July", "in 2024", "in two weeks"). Common error:
+    "in Monday" or "at Monday". Note: "in two weeks" means from now; "for two
+    weeks" means a duration.
+- skill_key: prepositions_of_place
+  title: Prepositions of place and movement
+  content: >-
+    Use "at" for a point or a place of activity ("at the office", "at the
+    meeting"), "in" for enclosed or larger areas ("in the office", "in
+    Kyiv", "in the team"), and "on" for surfaces and lines ("on the
+    second floor", "on the call"). For movement use "to": "I go to work", not
+    "I go at work". "Arrive in" a city or country, "arrive at" a smaller
+    place. Common error: "I am agree" or "depends from" instead of "I agree"
+    and "depends on".
+- skill_key: question_word_order
+  title: Question word order
+  content: >-
+    In questions, put the auxiliary before the subject: "What do you do?",
+    "Where did she go?", "Can you hear me?" Do not invert in embedded
+    questions: "Can you tell me where the office is?", not "where is the
+    office". Use do/does/did when there is no other auxiliary, and then the
+    main verb stays in the base form: "Did you finish?" not "Did you
+    finished?" Subject questions need no auxiliary: "Who called you?"
+- skill_key: present_simple_vs_continuous
+  title: Present simple vs present continuous
+  content: >-
+    Use present simple for habits, routines and facts ("I work remotely",
+    "The build takes ten minutes"). Use present continuous (am/is/are +
+    -ing) for actions in progress now or temporary situations ("I'm working
+    on the migration this week"). State verbs such as know, want, like,
+    understand, prefer are normally not used in continuous: say "I know",
+    not "I am knowing".
+- skill_key: countable_uncountable_nouns
+  title: Countable and uncountable nouns
+  content: >-
+    Uncountable nouns have no plural and no "a": information, advice, work,
+    feedback, equipment, knowledge, news, software. Say "some information",
+    "a piece of advice", "much feedback". Use "many" with countable plurals
+    ("many bugs") and "much" with uncountable ("much time"). Common errors:
+    "informations", "an advice", "a feedback", "softwares".
+- skill_key: gerund_vs_infinitive
+  title: Gerund and infinitive after verbs
+  content: >-
+    Some verbs take the -ing form: enjoy, avoid, finish, suggest, consider,
+    keep, mind ("I enjoy working", "avoid making"). Others take "to + verb":
+    want, decide, plan, hope, need, manage ("I want to learn", "I decided to
+    apply"). After a preposition always use -ing: "interested in learning",
+    "thanks for helping". Common error: "I look forward to meet you" instead
+    of "to meeting you".
+- skill_key: modal_verbs
+  title: Modal verbs (can, could, should, must, have to)
+  content: >-
+    A modal is followed by the base verb with no "to" and no -s: "She can
+    help", "You should ask", not "She cans" or "You should to ask". Use
+    "should" for advice, "must" or "have to" for obligation, "can" for
+    ability or permission and "could" for polite requests ("Could you repeat
+    that?"). "Don't have to" means not necessary; "mustn't" means forbidden.
+- skill_key: future_forms
+  title: Future forms (will, going to, present continuous)
+  content: >-
+    Use "will" for spontaneous decisions and predictions ("I'll send it
+    now"). Use "going to" for plans already made and for evidence-based
+    predictions ("I'm going to apply next week"). Use present continuous for
+    fixed arrangements ("I'm meeting the client at three"). After time words
+    such as when, if, as soon as, use present simple, not will: "When I
+    finish, I will call you", not "When I will finish".
+- skill_key: conditionals
+  title: Conditional sentences
+  content: >-
+    First conditional for real possibilities: if + present simple, will +
+    base verb ("If it fails, I will roll it back"). Second conditional for
+    unlikely or imagined situations: if + past simple, would + base verb ("If
+    I had more time, I would add tests"). Never put "will" or "would" in the
+    if-clause. Use "were" for all persons in formal second conditional: "If I
+    were you".
+- skill_key: comparatives_superlatives
+  title: Comparatives and superlatives
+  content: >-
+    Short adjectives take -er/-est ("faster", "the fastest"). Long adjectives
+    use more/most ("more reliable", "the most reliable"). Use "than" for
+    comparison, not "then" or "that": "faster than before". Do not combine
+    both forms: "more faster" is wrong. Irregular: good-better-best,
+    bad-worse-worst. Use "the" before a superlative: "the best option".
+- skill_key: relative_clauses
+  title: Relative clauses (who, which, that)
+  content: >-
+    Use "who" or "that" for people, "which" or "that" for things: "the
+    colleague who helped me", "the tool that we use". Do not repeat the
+    subject or object inside the clause: "the tool that we use it" is wrong,
+    say "the tool that we use". Use "whose" for possession ("a client whose
+    contract ends"). A comma before "which" adds extra information.
+- skill_key: tense_consistency
+  title: Keeping tenses consistent
+  content: >-
+    When telling a story in the past, keep the main events in the past
+    simple and do not switch back to the present: "Yesterday I opened the
+    ticket, found the bug and fixed it", not "found the bug and fix it".
+    Use past perfect for something that happened before another past event
+    ("The build had failed before I arrived"). In reported speech, tenses
+    usually move back one step: "He said he was busy".
+- skill_key: negation_and_auxiliaries
+  title: Negation and auxiliary verbs
+  content: >-
+    Make a negative with an auxiliary plus not: "I don't know", "She
+    doesn't work here", "We didn't finish", "I haven't seen it". Do not
+    negate the main verb directly: "I not like" and "He no work" are wrong.
+    The auxiliary carries the tense, so the main verb stays in the base
+    form: "didn't went" is wrong, say "didn't go". Do not use a double
+    negative: "I don't know nothing" should be "I don't know anything".
+- skill_key: reported_speech
+  title: Reported speech
+  content: >-
+    When reporting what someone said, tenses usually shift back: "I am
+    busy" becomes "She said she was busy"; "I will call" becomes "He said he
+    would call". Pronouns and time words change too (today becomes that day,
+    tomorrow becomes the next day). Reported questions use statement word
+    order with no do/does: "She asked where I worked", not "She asked where
+    did I work".
