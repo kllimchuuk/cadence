@@ -6,12 +6,18 @@ from fastapi import WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, ValidationError
 from starlette.websockets import WebSocketState
 
+from orchestration.analysis_runner import SessionAnalysisRunner
+from orchestration.exceptions import SessionAnalysisFailedError
 from orchestration.session_runner import SessionRunner, SessionTurn
-from practice.exceptions import PracticeSessionIdleError, TooManyActiveSessionsError
-from practice.models import LearningSession
-from practice.schemas import (
+from practice.exceptions import TooManyActiveSessionsError
+from practice.models import LearningSession, SessionStatus
+from realtime.exceptions import PracticeSessionIdleError
+from realtime.schemas import (
     CLIENT_MESSAGE_ADAPTER,
-    AssistantMessage,
+    AnalysisFailed,
+    AnalysisReady,
+    AssistantDelta,
+    AssistantDone,
     ClientMessage,
     EndSession,
     InvalidMessage,
@@ -37,10 +43,12 @@ class PracticeSessionSocket:
         self,
         websocket: WebSocket,
         runner: SessionRunner,
+        analysis_runner: SessionAnalysisRunner,
         allowed_origins: list[str],
     ) -> None:
         self._websocket = websocket
         self._runner = runner
+        self._analysis_runner = analysis_runner
         self._allowed_origins = allowed_origins
 
     async def run(self, user: User | None, scenario_id: str) -> None:
@@ -81,7 +89,7 @@ class PracticeSessionSocket:
 
     async def _converse(self, learning_session: LearningSession) -> None:
         try:
-            await self._exchange_turns(learning_session)
+            final_turn = await self._exchange_turns(learning_session)
         except WebSocketDisconnect:
             await self._abandon(learning_session)
         except PracticeSessionIdleError:
@@ -93,7 +101,25 @@ class PracticeSessionSocket:
             )
             await self._abandon_and_close(learning_session, INTERNAL_ERROR_CLOSE_CODE)
         else:
-            await self._close(status.WS_1000_NORMAL_CLOSURE)
+            await self._finish(learning_session, final_turn)
+
+    async def _finish(
+        self, learning_session: LearningSession, final_turn: SessionTurn
+    ) -> None:
+        for message in self._turn_messages(final_turn):
+            await self._deliver(message)
+        if final_turn.completed:
+            await self._deliver(await self._analysis_report(learning_session))
+        await self._close(status.WS_1000_NORMAL_CLOSURE)
+
+    async def _analysis_report(self, learning_session: LearningSession) -> BaseModel:
+        try:
+            focus_points = await asyncio.shield(
+                self._analysis_runner.analyse(learning_session)
+            )
+        except SessionAnalysisFailedError:
+            return AnalysisFailed()
+        return AnalysisReady(focus_points=list(focus_points))
 
     async def _abandon_and_close(
         self, learning_session: LearningSession, close_code: int
@@ -110,27 +136,43 @@ class PracticeSessionSocket:
         if self._websocket.application_state == WebSocketState.CONNECTED:
             await self._websocket.close(code=close_code)
 
-    async def _exchange_turns(self, learning_session: LearningSession) -> None:
-        turn = await self._runner.open_conversation(learning_session)
-        await self._send_turn(turn)
+    async def _exchange_turns(self, learning_session: LearningSession) -> SessionTurn:
+        turn = await self._runner.open_conversation(learning_session, self._send_delta)
 
         while turn.awaiting_user:
-            message = await self._receive_client_message()
-            turn = await self._respond_to(learning_session, message)
-            await self._send_turn(turn)
+            for message in self._turn_messages(turn):
+                await self._send(message)
+            client_message = await self._receive_client_message()
+            turn = await self._respond_to(learning_session, client_message)
+
+        return turn
 
     async def _respond_to(
         self, learning_session: LearningSession, message: ClientMessage
     ) -> SessionTurn:
         if isinstance(message, EndSession):
-            return await self._runner.end_conversation(learning_session)
-        return await self._runner.submit_turn(learning_session, message.content)
+            return await self._runner.end_conversation(
+                learning_session, self._send_delta
+            )
+        return await self._runner.submit_turn(
+            learning_session, message.content, self._send_delta
+        )
 
-    async def _send_turn(self, turn: SessionTurn) -> None:
-        for content in turn.assistant_messages:
-            await self._send(AssistantMessage(content=content))
+    async def _send_delta(self, delta: str) -> None:
+        await self._send(AssistantDelta(content=delta))
+
+    @classmethod
+    def _turn_messages(cls, turn: SessionTurn) -> list[BaseModel]:
+        messages: list[BaseModel] = [
+            AssistantDone(content=content) for content in turn.assistant_messages
+        ]
         if not turn.awaiting_user:
-            await self._send(SessionEnded(focus_points=list(turn.focus_points)))
+            messages.append(SessionEnded(status=cls._ended_status(turn)))
+        return messages
+
+    @staticmethod
+    def _ended_status(turn: SessionTurn) -> SessionStatus:
+        return SessionStatus.COMPLETED if turn.completed else SessionStatus.INCOMPLETE
 
     async def _receive_client_message(self) -> ClientMessage:
         try:
@@ -149,3 +191,11 @@ class PracticeSessionSocket:
 
     async def _send(self, message: BaseModel) -> None:
         await self._websocket.send_json(message.model_dump(mode="json"))
+
+    async def _deliver(self, message: BaseModel) -> None:
+        if self._websocket.application_state != WebSocketState.CONNECTED:
+            return
+        try:
+            await self._send(message)
+        except WebSocketDisconnect:
+            return

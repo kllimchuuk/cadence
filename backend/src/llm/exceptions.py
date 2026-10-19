@@ -7,3 +7,11 @@ class LLMResponseError(AppException):
             code="llm_response_error",
             message=f"The LLM provider returned no usable response: {reason}",
         )
+
+
+class LLMUnavailableError(AppException):
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            code="llm_unavailable",
+            message=f"The LLM provider is temporarily unavailable: {reason}",
+        )

@@ -1,14 +1,14 @@
 from langgraph.runtime import Runtime
 
-from orchestration.context import SessionRuntimeContext
-from orchestration.state import SessionState
+from orchestration.context import ConversationRuntimeContext
+from orchestration.state import ConversationState
 from practice.models import SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 
 
 async def finish_session_node(
-    state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
+    state: ConversationState, *, runtime: Runtime[ConversationRuntimeContext]
 ) -> dict[str, object]:
     async with runtime.context.session_factory() as session:
         practice_service = PracticeService(LearningSessionRepositoryImpl(session))

@@ -1,9 +1,4 @@
-from core.exceptions import (
-    AppException,
-    ConflictError,
-    NotFoundError,
-    ValidationError,
-)
+from core.exceptions import ConflictError, NotFoundError, ValidationError
 
 
 class LearningSessionNotFoundError(NotFoundError):
@@ -26,12 +21,4 @@ class TooManyActiveSessionsError(ConflictError):
         super().__init__(
             code="too_many_active_sessions",
             message="Finish an ongoing practice session before starting another.",
-        )
-
-
-class PracticeSessionIdleError(AppException):
-    def __init__(self) -> None:
-        super().__init__(
-            code="practice_session_idle",
-            message="No message arrived before the idle timeout.",
         )

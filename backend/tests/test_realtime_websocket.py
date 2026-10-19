@@ -15,12 +15,11 @@ from core.database import build_engine, build_session_factory
 from llm.dependencies import get_llm_client_factory
 from main import create_app
 from orchestration.nodes import conversing as conversing_node_module
-from orchestration.schemas import SessionAnalysisResult
-from practice import websocket as websocket_module
-from practice.models import LearningSession, SessionStatus
+from practice.models import AnalysisStatus, LearningSession, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
-from practice.schemas import MAX_USER_TURN_LENGTH
-from practice.websocket import (
+from realtime import websocket as websocket_module
+from realtime.schemas import MAX_USER_TURN_LENGTH
+from realtime.websocket import (
     FORBIDDEN_ORIGIN_CLOSE_CODE,
     IDLE_TIMEOUT_CLOSE_CODE,
     INTERNAL_ERROR_CLOSE_CODE,
@@ -28,10 +27,18 @@ from practice.websocket import (
     TOO_MANY_SESSIONS_CLOSE_CODE,
     UNAUTHENTICATED_CLOSE_CODE,
 )
+from tests.fakes import (
+    FailingAnalysisLLMClient,
+    FailingLLMClient,
+    FakeLLMClient,
+    FakeLLMClientFactory,
+    reply_deltas,
+)
 from tests.helpers import settings_kwargs
 
 POLL_TIMEOUT_SECONDS = 3
 POLL_INTERVAL_SECONDS = 0.05
+MAX_FRAMES_TO_SCAN = 50
 END_SESSION_FRAME = {"type": "end_session"}
 USER_MESSAGE_FRAME = {"type": "user_message", "content": "Sure, let's continue."}
 
@@ -56,51 +63,6 @@ def register_payload(**overrides: str) -> dict:
     }
     payload.update(overrides)
     return payload
-
-
-class _FakeDualClient:
-    def __init__(self, reply: str, analysis_result: SessionAnalysisResult) -> None:
-        self._reply = reply
-        self._analysis_result = analysis_result
-
-    async def generate(self, _prompt: str) -> str:
-        return self._reply
-
-    async def generate_structured(
-        self, _prompt: str, _schema: type
-    ) -> SessionAnalysisResult:
-        return self._analysis_result
-
-
-class _FakeLLMClientFactory:
-    def __init__(self, reply: str, analysis_result: SessionAnalysisResult) -> None:
-        self._reply = reply
-        self._analysis_result = analysis_result
-
-    def create(self, _model: str) -> _FakeDualClient:
-        return _FakeDualClient(self._reply, self._analysis_result)
-
-
-class _FailingLLMClient:
-    async def generate(self, _prompt: str) -> str:
-        raise RuntimeError("the model is unavailable")
-
-
-class _FailingLLMClientFactory:
-    def create(self, _model: str) -> _FailingLLMClient:
-        return _FailingLLMClient()
-
-
-def _default_analysis_result() -> SessionAnalysisResult:
-    return SessionAnalysisResult(
-        grammar_findings=[],
-        vocabulary_findings=[],
-        fluency_findings={},
-        task_completion={},
-        focus_points=["Practice past-tense verbs"],
-        skill_observations=[],
-        new_facts=[],
-    )
 
 
 def _fetch_session(
@@ -164,6 +126,22 @@ def _wait_for_forgotten_checkpoints(database_url: str, session_id: uuid.UUID) ->
     )
 
 
+def _receive_until(ws: Any, frame_type: str) -> dict[str, Any]:
+    for _ in range(MAX_FRAMES_TO_SCAN):
+        frame = ws.receive_json()
+        if frame["type"] == frame_type:
+            return frame
+    raise AssertionError(f"no {frame_type} frame arrived")
+
+
+def _receive_assistant_message(ws: Any) -> tuple[list[str], str]:
+    deltas = []
+    while (frame := ws.receive_json())["type"] == "assistant_delta":
+        deltas.append(frame["content"])
+    assert frame["type"] == "assistant_done", frame
+    return deltas, frame["content"]
+
+
 @pytest.fixture
 def client(migrated_schema: str) -> Iterator[TestClient]:
     settings = Settings(
@@ -171,8 +149,8 @@ def client(migrated_schema: str) -> Iterator[TestClient]:
         **settings_kwargs(DATABASE_URL=migrated_schema, SECURE_COOKIES="false"),
     )
     app = create_app(settings)
-    app.dependency_overrides[get_llm_client_factory] = lambda: _FakeLLMClientFactory(
-        "Great, tell me more.", _default_analysis_result()
+    app.dependency_overrides[get_llm_client_factory] = lambda: FakeLLMClientFactory(
+        FakeLLMClient("Great, tell me more.")
     )
 
     with TestClient(app) as test_client:
@@ -247,14 +225,14 @@ def test_an_invalid_frame_is_rejected_without_ending_the_conversation(
         "/practice/sessions/ws?scenario_id=job_interview"
     ) as ws:
         ws.receive_json()
-        ws.receive_json()
+        _receive_assistant_message(ws)
         send_invalid_frame(ws)
         rejected = ws.receive_json()
         ws.send_json(USER_MESSAGE_FRAME)
-        reply = ws.receive_json()
+        _, reply = _receive_assistant_message(ws)
 
     assert rejected == {"type": "invalid_message"}
-    assert reply["type"] == "assistant_message"
+    assert reply == "Great, tell me more."
 
 
 def test_opening_more_sessions_than_allowed_at_once_is_rejected(
@@ -280,7 +258,7 @@ def test_an_internal_failure_closes_the_socket_and_abandons_the_session(
     migrated_schema: str,
 ) -> None:
     client.app.dependency_overrides[get_llm_client_factory] = (
-        lambda: _FailingLLMClientFactory()
+        lambda: FakeLLMClientFactory(FailingLLMClient())
     )
     register_response = client.post("/auth/register", json=register_payload())
     user_id = uuid.UUID(register_response.json()["id"])
@@ -311,7 +289,7 @@ def test_an_idle_connection_is_closed_with_a_timeout_code(
         "/practice/sessions/ws?scenario_id=job_interview"
     ) as ws:
         ws.receive_json()
-        ws.receive_json()
+        _receive_assistant_message(ws)
         with pytest.raises(WebSocketDisconnect) as exc_info:
             ws.receive_json()
 
@@ -334,25 +312,24 @@ def test_a_full_conversation_completes_with_focus_points(
         assert started["type"] == "session_started"
         session_id = uuid.UUID(started["session_id"])
 
-        opening = ws.receive_json()
-        assert opening["type"] == "assistant_message"
+        _, opening = _receive_assistant_message(ws)
+        assert opening == "Great, tell me more."
 
         for _ in range(conversing_node_module.MAX_CONVERSATION_TURNS):
             ws.send_json(USER_MESSAGE_FRAME)
 
-        ended = None
-        for _ in range(10):
-            frame = ws.receive_json()
-            if frame["type"] == "session_ended":
-                ended = frame
-                break
+        ended = _receive_until(ws, "session_ended")
+        report = ws.receive_json()
 
-        assert ended is not None
-        assert 1 <= len(ended["focus_points"]) <= 3
-
+    assert ended == {"type": "session_ended", "status": "completed"}
+    assert report == {
+        "type": "analysis_ready",
+        "focus_points": ["Practice past-tense verbs"],
+    }
     finished = _fetch_session(migrated_schema, session_id, user_id)
     assert finished is not None
     assert finished.status == SessionStatus.COMPLETED
+    assert finished.analysis_status == AnalysisStatus.COMPLETED
     assert _checkpoint_count(migrated_schema, session_id) == 0
 
 
@@ -368,7 +345,7 @@ def test_disconnecting_mid_conversation_marks_the_session_incomplete(
     ) as ws:
         started = ws.receive_json()
         session_id = uuid.UUID(started["session_id"])
-        ws.receive_json()
+        _receive_assistant_message(ws)
 
     abandoned = _wait_for_status(
         migrated_schema, session_id, user_id, SessionStatus.INCOMPLETE
@@ -389,7 +366,7 @@ def test_an_open_socket_does_not_hold_a_database_connection(
         "/practice/sessions/ws?scenario_id=job_interview"
     ) as ws:
         ws.receive_json()
-        ws.receive_json()
+        _receive_assistant_message(ws)
 
         assert client.app.state.db_engine.pool.checkedout() == 0
 
@@ -405,19 +382,24 @@ def test_ending_the_session_after_a_turn_completes_it_with_focus_points(
         "/practice/sessions/ws?scenario_id=job_interview"
     ) as ws:
         session_id = uuid.UUID(ws.receive_json()["session_id"])
-        ws.receive_json()
+        _receive_assistant_message(ws)
         ws.send_json(USER_MESSAGE_FRAME)
-        assert ws.receive_json()["type"] == "assistant_message"
+        _receive_assistant_message(ws)
         assert _checkpoint_count(migrated_schema, session_id) > 0
 
         ws.send_json(END_SESSION_FRAME)
-        assert ws.receive_json()["type"] == "assistant_message"
+        _receive_assistant_message(ws)
         ended = ws.receive_json()
+        report = ws.receive_json()
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            ws.receive_json()
 
-    assert ended == {
-        "type": "session_ended",
+    assert ended == {"type": "session_ended", "status": "completed"}
+    assert report == {
+        "type": "analysis_ready",
         "focus_points": ["Practice past-tense verbs"],
     }
+    assert exc_info.value.code == status.WS_1000_NORMAL_CLOSURE
     finished = _fetch_session(migrated_schema, session_id, user_id)
     assert finished is not None
     assert finished.status == SessionStatus.COMPLETED
@@ -435,16 +417,94 @@ def test_ending_the_session_before_speaking_marks_it_incomplete(
         "/practice/sessions/ws?scenario_id=job_interview"
     ) as ws:
         session_id = uuid.UUID(ws.receive_json()["session_id"])
-        ws.receive_json()
+        _receive_assistant_message(ws)
         ws.send_json(END_SESSION_FRAME)
         ended = ws.receive_json()
         with pytest.raises(WebSocketDisconnect) as exc_info:
             ws.receive_json()
 
-    assert ended == {"type": "session_ended", "focus_points": []}
+    assert ended == {"type": "session_ended", "status": "incomplete"}
     assert exc_info.value.code == status.WS_1000_NORMAL_CLOSURE
     abandoned = _fetch_session(migrated_schema, session_id, user_id)
     assert abandoned is not None
     assert abandoned.status == SessionStatus.INCOMPLETE
+    assert abandoned.analysis_status is None
     assert abandoned.transcript[0]["role"] == "assistant"
     assert _checkpoint_count(migrated_schema, session_id) == 0
+
+
+def test_a_failed_analysis_is_reported_without_undoing_the_conversation(
+    client: TestClient,
+    migrated_schema: str,
+) -> None:
+    client.app.dependency_overrides[get_llm_client_factory] = (
+        lambda: FakeLLMClientFactory(FailingAnalysisLLMClient("Go on."))
+    )
+    register_response = client.post("/auth/register", json=register_payload())
+    user_id = uuid.UUID(register_response.json()["id"])
+
+    with client.websocket_connect(
+        "/practice/sessions/ws?scenario_id=job_interview"
+    ) as ws:
+        session_id = uuid.UUID(ws.receive_json()["session_id"])
+        _receive_assistant_message(ws)
+        ws.send_json(USER_MESSAGE_FRAME)
+        _receive_assistant_message(ws)
+        ws.send_json(END_SESSION_FRAME)
+        ended = _receive_until(ws, "session_ended")
+        report = ws.receive_json()
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            ws.receive_json()
+
+    assert ended == {"type": "session_ended", "status": "completed"}
+    assert report == {"type": "analysis_failed"}
+    assert exc_info.value.code == status.WS_1000_NORMAL_CLOSURE
+    finished = _fetch_session(migrated_schema, session_id, user_id)
+    assert finished is not None
+    assert finished.status == SessionStatus.COMPLETED
+    assert finished.analysis_status == AnalysisStatus.FAILED
+
+
+def test_leaving_right_after_the_goodbye_still_completes_the_analysis(
+    client: TestClient,
+    migrated_schema: str,
+) -> None:
+    register_response = client.post("/auth/register", json=register_payload())
+    user_id = uuid.UUID(register_response.json()["id"])
+
+    with client.websocket_connect(
+        "/practice/sessions/ws?scenario_id=job_interview"
+    ) as ws:
+        session_id = uuid.UUID(ws.receive_json()["session_id"])
+        _receive_assistant_message(ws)
+        ws.send_json(USER_MESSAGE_FRAME)
+        _receive_assistant_message(ws)
+        ws.send_json(END_SESSION_FRAME)
+        _receive_until(ws, "session_ended")
+
+    analysed = _wait_until(
+        lambda: _fetch_session(migrated_schema, session_id, user_id),
+        lambda record: record is not None
+        and record.analysis_status != AnalysisStatus.PENDING,
+    )
+    assert analysed is not None
+    assert analysed.analysis_status == AnalysisStatus.COMPLETED
+
+
+def test_a_reply_streams_as_deltas_and_then_arrives_whole(
+    client: TestClient,
+) -> None:
+    client.post("/auth/register", json=register_payload())
+
+    with client.websocket_connect(
+        "/practice/sessions/ws?scenario_id=job_interview"
+    ) as ws:
+        ws.receive_json()
+        opening_deltas, opening = _receive_assistant_message(ws)
+        ws.send_json(USER_MESSAGE_FRAME)
+        reply_deltas_received, reply = _receive_assistant_message(ws)
+
+    assert opening_deltas == reply_deltas("Great, tell me more.")
+    assert "".join(opening_deltas) == opening
+    assert reply_deltas_received == reply_deltas("Great, tell me more.")
+    assert "".join(reply_deltas_received) == reply

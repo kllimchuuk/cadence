@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from analysis.repository import SessionAnalysisRepository, SessionAnalysisRepositoryImpl
 from practice.repository import LearningSessionRepositoryImpl
+from tests.fakes import analysis_result
 from users.repository import UserRepositoryImpl
 
 
@@ -47,18 +48,6 @@ async def session_id(session: AsyncSession, user_id: uuid.UUID) -> uuid.UUID:
     return record.id
 
 
-def analysis_kwargs(session_id: uuid.UUID, user_id: uuid.UUID) -> dict[str, object]:
-    return {
-        "session_id": session_id,
-        "user_id": user_id,
-        "grammar_findings": [{"error": "subject-verb agreement"}],
-        "vocabulary_findings": [{"gap": "filler words"}],
-        "fluency_findings": {"words_per_minute": 110},
-        "task_completion": {"introduced_self": True},
-        "focus_points": ["Practice past tense"],
-    }
-
-
 @pytest.mark.asyncio
 async def test_an_analysis_is_created_and_read_back_by_session_id(
     session: AsyncSession,
@@ -66,15 +55,15 @@ async def test_an_analysis_is_created_and_read_back_by_session_id(
     session_id: uuid.UUID,
     user_id: uuid.UUID,
 ) -> None:
-    await repository.create(**analysis_kwargs(session_id, user_id))
+    await repository.create(session_id, user_id, analysis_result())
     await session.commit()
     session.expunge_all()
 
     found = await repository.get_by_session_id(session_id, user_id)
 
     assert found is not None
-    assert found.grammar_findings == [{"error": "subject-verb agreement"}]
-    assert found.fluency_findings == {"words_per_minute": 110}
+    assert found.fluency_findings == {"summary": "Steady, with a few pauses."}
+    assert found.focus_points == ["Practice past-tense verbs"]
 
 
 @pytest.mark.asyncio
@@ -85,7 +74,7 @@ async def test_an_analysis_is_not_visible_to_another_user(
     user_id: uuid.UUID,
     other_user_id: uuid.UUID,
 ) -> None:
-    await repository.create(**analysis_kwargs(session_id, user_id))
+    await repository.create(session_id, user_id, analysis_result())
     await session.commit()
 
     assert await repository.get_by_session_id(session_id, other_user_id) is None
@@ -98,7 +87,7 @@ async def test_analyses_are_listed_by_user(
     session_id: uuid.UUID,
     user_id: uuid.UUID,
 ) -> None:
-    await repository.create(**analysis_kwargs(session_id, user_id))
+    await repository.create(session_id, user_id, analysis_result())
     await session.commit()
 
     found = await repository.list_by_user(user_id)
@@ -113,8 +102,8 @@ async def test_a_second_analysis_for_the_same_session_is_rejected(
     session_id: uuid.UUID,
     user_id: uuid.UUID,
 ) -> None:
-    await repository.create(**analysis_kwargs(session_id, user_id))
+    await repository.create(session_id, user_id, analysis_result())
     await session.commit()
 
     with pytest.raises(IntegrityError):
-        await repository.create(**analysis_kwargs(session_id, user_id))
+        await repository.create(session_id, user_id, analysis_result())

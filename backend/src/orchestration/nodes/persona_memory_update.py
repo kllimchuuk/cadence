@@ -1,13 +1,13 @@
 from langgraph.runtime import Runtime
 
-from orchestration.context import SessionRuntimeContext
-from orchestration.state import SessionState
+from orchestration.context import AnalysisRuntimeContext
+from orchestration.state import AnalysisState
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
 
 
 async def persona_memory_update_node(
-    state: SessionState, *, runtime: Runtime[SessionRuntimeContext]
+    state: AnalysisState, *, runtime: Runtime[AnalysisRuntimeContext]
 ) -> dict[str, object]:
     persona_facts = state["persona_facts"]
     if not persona_facts:

@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, WebSocket
 
 from auth.dependencies import get_settings, get_websocket_user
 from config import Settings
-from orchestration.dependencies import get_session_runner
+from orchestration.analysis_runner import SessionAnalysisRunner
+from orchestration.dependencies import get_session_analysis_runner, get_session_runner
 from orchestration.session_runner import SessionRunner
-from practice.websocket import PracticeSessionSocket
+from realtime.websocket import PracticeSessionSocket
 from users.models import User
 
 router = APIRouter(prefix="/practice", tags=["practice"])
@@ -18,8 +19,11 @@ async def practice_session_ws(
     scenario_id: str,
     user: Annotated[User | None, Depends(get_websocket_user)],
     runner: Annotated[SessionRunner, Depends(get_session_runner)],
+    analysis_runner: Annotated[
+        SessionAnalysisRunner, Depends(get_session_analysis_runner)
+    ],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
-    await PracticeSessionSocket(websocket, runner, settings.cors_origins).run(
-        user, scenario_id
-    )
+    await PracticeSessionSocket(
+        websocket, runner, analysis_runner, settings.cors_origins
+    ).run(user, scenario_id)

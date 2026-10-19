@@ -35,6 +35,7 @@ def settings_kwargs(**overrides: str) -> dict[str, str]:
         ),
         "GEMINI_API_KEY": "test-gemini-api-key",
         "GEMINI_MODEL": "test-gemini-model",
+        "LLM_TIMEOUT_SECONDS": "30",
     }
     kwargs.update(overrides)
     return kwargs

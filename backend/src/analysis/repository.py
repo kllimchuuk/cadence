@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from analysis.models import SessionAnalysis
+from analysis.schemas import SessionAnalysisResult
 from core.database import get_db
 
 
@@ -16,11 +17,7 @@ class SessionAnalysisRepository(ABC):
         self,
         session_id: uuid.UUID,
         user_id: uuid.UUID,
-        grammar_findings: list[object],
-        vocabulary_findings: list[object],
-        fluency_findings: dict[str, object],
-        task_completion: dict[str, object],
-        focus_points: list[object],
+        result: SessionAnalysisResult,
     ) -> SessionAnalysis:
         raise NotImplementedError()
 
@@ -43,20 +40,12 @@ class SessionAnalysisRepositoryImpl(SessionAnalysisRepository):
         self,
         session_id: uuid.UUID,
         user_id: uuid.UUID,
-        grammar_findings: list[object],
-        vocabulary_findings: list[object],
-        fluency_findings: dict[str, object],
-        task_completion: dict[str, object],
-        focus_points: list[object],
+        result: SessionAnalysisResult,
     ) -> SessionAnalysis:
         record = SessionAnalysis(
             session_id=session_id,
             user_id=user_id,
-            grammar_findings=grammar_findings,
-            vocabulary_findings=vocabulary_findings,
-            fluency_findings=fluency_findings,
-            task_completion=task_completion,
-            focus_points=focus_points,
+            **result.model_dump(mode="json"),
         )
         self._session.add(record)
         await self._session.flush()

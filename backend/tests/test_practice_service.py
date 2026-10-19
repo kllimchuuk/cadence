@@ -9,7 +9,7 @@ from practice.exceptions import (
     LearningSessionNotFoundError,
     TooManyActiveSessionsError,
 )
-from practice.models import SessionStatus
+from practice.models import AnalysisStatus, SessionStatus
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import MAX_ACTIVE_SESSIONS_PER_USER, PracticeService
 from scenarios.exceptions import UnknownScenarioError
@@ -109,6 +109,58 @@ async def test_finishing_a_session_sets_status_and_transcript(
     assert finished.status == SessionStatus.COMPLETED
     assert finished.transcript == transcript
     assert finished.ended_at is not None
+
+
+@pytest.mark.asyncio
+async def test_a_completed_session_awaits_its_analysis(
+    service: PracticeService, user_id: uuid.UUID
+) -> None:
+    started = await service.start_session(user_id, "job_interview")
+
+    finished = await service.finish_session(
+        started.id, user_id, SessionStatus.COMPLETED, []
+    )
+
+    assert finished.analysis_status == AnalysisStatus.PENDING
+
+
+@pytest.mark.asyncio
+async def test_an_incomplete_session_is_never_analysed(
+    service: PracticeService, user_id: uuid.UUID
+) -> None:
+    started = await service.start_session(user_id, "job_interview")
+
+    finished = await service.finish_session(
+        started.id, user_id, SessionStatus.INCOMPLETE, []
+    )
+
+    assert finished.analysis_status is None
+
+
+@pytest.mark.asyncio
+async def test_the_analysis_outcome_is_recorded_on_the_session(
+    service: PracticeService, user_id: uuid.UUID
+) -> None:
+    started = await service.start_session(user_id, "job_interview")
+    await service.finish_session(started.id, user_id, SessionStatus.COMPLETED, [])
+
+    recorded = await service.record_analysis_status(
+        started.id, user_id, AnalysisStatus.COMPLETED
+    )
+
+    assert recorded.analysis_status == AnalysisStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_recording_an_analysis_outcome_for_another_users_session_is_rejected(
+    service: PracticeService, user_id: uuid.UUID, other_user_id: uuid.UUID
+) -> None:
+    started = await service.start_session(user_id, "job_interview")
+
+    with pytest.raises(LearningSessionNotFoundError):
+        await service.record_analysis_status(
+            started.id, other_user_id, AnalysisStatus.COMPLETED
+        )
 
 
 @pytest.mark.asyncio

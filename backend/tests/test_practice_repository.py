@@ -5,7 +5,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from practice.models import SessionStatus
+from practice.models import AnalysisStatus, SessionStatus
 from practice.repository import LearningSessionRepository, LearningSessionRepositoryImpl
 from users.repository import UserRepositoryImpl
 
@@ -101,11 +101,34 @@ async def test_finishing_a_session_sets_status_transcript_and_ended_at(
     created = await repository.create(user_id, "job_interview")
     transcript = [{"role": "agent", "text": "Tell me about yourself."}]
 
-    finished = await repository.finish(created, SessionStatus.COMPLETED, transcript)
+    finished = await repository.finish(
+        created, SessionStatus.COMPLETED, transcript, AnalysisStatus.PENDING
+    )
 
     assert finished.status == SessionStatus.COMPLETED
     assert finished.transcript == transcript
+    assert finished.analysis_status == AnalysisStatus.PENDING
     assert finished.ended_at is not None
+
+
+@pytest.mark.asyncio
+async def test_the_analysis_status_is_updated_and_read_back(
+    session: AsyncSession,
+    repository: LearningSessionRepository,
+    user_id: uuid.UUID,
+) -> None:
+    created = await repository.create(user_id, "job_interview")
+    await repository.finish(
+        created, SessionStatus.COMPLETED, [], AnalysisStatus.PENDING
+    )
+
+    await repository.update_analysis_status(created, AnalysisStatus.FAILED)
+    await session.commit()
+    session.expunge_all()
+
+    found = await repository.get_by_id(created.id, user_id)
+    assert found is not None
+    assert found.analysis_status == AnalysisStatus.FAILED
 
 
 @pytest.mark.asyncio
@@ -123,7 +146,7 @@ async def test_only_the_users_recent_in_progress_sessions_are_counted(
 ) -> None:
     await repository.create(user_id, "job_interview")
     finished = await repository.create(user_id, "client_call")
-    await repository.finish(finished, SessionStatus.INCOMPLETE, [])
+    await repository.finish(finished, SessionStatus.INCOMPLETE, [], None)
     await repository.create(other_user_id, "job_interview")
     an_hour_ago = datetime.now(UTC) - timedelta(hours=1)
     in_an_hour = datetime.now(UTC) + timedelta(hours=1)
