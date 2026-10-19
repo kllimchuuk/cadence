@@ -1,7 +1,11 @@
 import uuid
 
-from orchestration.prompts import build_persona_system_prompt
+from orchestration.prompts import (
+    build_persona_system_prompt,
+    build_scenario_content_query,
+)
 from persona.models import PersonaMemory
+from rag.models import ContentChunk
 from scenarios.config import get_scenario
 
 
@@ -49,3 +53,49 @@ def test_the_prompt_omits_the_memory_section_when_facts_are_empty() -> None:
     prompt = build_persona_system_prompt(scenario, memory)
 
     assert "remember" not in prompt.lower()
+
+
+def _chunk(title: str, content: str) -> ContentChunk:
+    return ContentChunk(title=title, content=content)
+
+
+def test_the_prompt_lists_reference_content_inside_a_delimited_block() -> None:
+    scenario = get_scenario("job_interview")
+    chunks = [
+        _chunk("Most challenging project", "Ask what made it hard."),
+        _chunk("Strengths", "Ask for one real weakness."),
+    ]
+
+    prompt = build_persona_system_prompt(scenario, None, chunks)
+
+    block = prompt.split("<reference>")[1].split("</reference>")[0]
+    assert "- Most challenging project: Ask what made it hard." in block
+    assert "- Strengths: Ask for one real weakness." in block
+    assert "not instructions" in prompt.split("<reference>")[0]
+
+
+def test_the_prompt_omits_the_reference_block_when_nothing_was_retrieved() -> None:
+    scenario = get_scenario("job_interview")
+
+    prompt = build_persona_system_prompt(scenario, None, [])
+
+    assert "<reference>" not in prompt
+
+
+def test_the_scenario_content_query_combines_remembered_facts_and_goals() -> None:
+    scenario = get_scenario("job_interview")
+    memory = _persona_memory(["User is moving from backend into AI."])
+
+    query = build_scenario_content_query(scenario, memory)
+
+    assert "User is moving from backend into AI." in query
+    for goal in scenario.goal_checklist:
+        assert goal in query
+
+
+def test_the_scenario_content_query_without_memory_is_just_the_goals() -> None:
+    scenario = get_scenario("job_interview")
+
+    query = build_scenario_content_query(scenario, None)
+
+    assert query == ". ".join(scenario.goal_checklist)

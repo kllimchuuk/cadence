@@ -115,6 +115,9 @@ class FakeLLMClientFactory:
     def create(self, _model: str) -> FakeLLMClient:
         return self._client
 
+    def create_embedding_client(self, _model: str) -> "FakeEmbeddingClient":
+        return FakeEmbeddingClient()
+
 
 def fake_embedding(text: str) -> list[float]:
     vector = [0.0] * EMBEDDING_DIMENSIONS

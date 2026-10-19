@@ -14,7 +14,7 @@ from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
 
-from tests.fakes import FakeLLMClient
+from tests.fakes import FakeEmbeddingClient, FakeLLMClient
 from tests.helpers import run_graph_to_completion
 
 
@@ -47,6 +47,7 @@ async def test_finish_session_closes_a_real_learning_session(
     context = ConversationRuntimeContext(
         briefing_llm=FakeLLMClient("Hi, thanks for joining!"),
         conversing_llm=FakeLLMClient("That's a great start — tell me more."),
+        embedder=FakeEmbeddingClient(),
         session_factory=session_factory,
     )
 
