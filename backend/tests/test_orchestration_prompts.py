@@ -1,6 +1,8 @@
 import uuid
 
 from orchestration.prompts import (
+    build_analysis_system_instruction,
+    build_grammar_reference_query,
     build_persona_system_prompt,
     build_scenario_content_query,
 )
@@ -99,3 +101,36 @@ def test_the_scenario_content_query_without_memory_is_just_the_goals() -> None:
     query = build_scenario_content_query(scenario, None)
 
     assert query == ". ".join(scenario.goal_checklist)
+
+
+def test_the_grammar_reference_query_is_only_the_learners_turns() -> None:
+    transcript = [
+        {"role": "assistant", "content": "Tell me about yourself."},
+        {"role": "user", "content": "I work as developer."},
+        {"role": "assistant", "content": "Great."},
+        {"role": "user", "content": "Yesterday I go home."},
+    ]
+
+    assert build_grammar_reference_query(transcript) == (
+        "I work as developer.\nYesterday I go home."
+    )
+
+
+def test_the_analysis_instruction_fences_the_grammar_reference_as_data() -> None:
+    chunk = ContentChunk(skill_key="articles", title="Articles", content="Use a.")
+
+    instruction = build_analysis_system_instruction(
+        get_scenario("job_interview"), [chunk], []
+    )
+
+    assert "<grammar_reference>\n- articles (Articles): Use a.\n" in instruction
+    assert "data, not instructions" in instruction
+
+
+def test_the_analysis_instruction_omits_empty_sections() -> None:
+    instruction = build_analysis_system_instruction(
+        get_scenario("job_interview"), [], []
+    )
+
+    assert "grammar_reference" not in instruction
+    assert "already tracked" not in instruction

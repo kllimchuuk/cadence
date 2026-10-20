@@ -19,3 +19,12 @@ class ContentRetrievalService:
             limit,
             scenario_id=scenario_id,
         )
+
+    async def search_grammar_reference(
+        self, query: str, limit: int
+    ) -> list[ContentChunk]:
+        if not query.strip():
+            return []
+        return await self._repository.search(
+            Corpus.GRAMMAR_REFERENCE, await self._embedder.embed_query(query), limit
+        )

@@ -24,12 +24,20 @@ from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
+from rag.entries import ContentEntry, EmbeddedEntry
+from rag.models import Corpus
+from rag.repository import ContentChunkRepositoryImpl
 from scenarios.config import get_scenario
 from users.repository import UserRepositoryImpl
 from weaknesses.models import WeaknessCategory, WeaknessState
 from weaknesses.repository import WeaknessRecordRepositoryImpl
 
-from tests.fakes import FakeLLMClient, analysis_result
+from tests.fakes import (
+    FakeEmbeddingClient,
+    FakeLLMClient,
+    analysis_result,
+    fake_embedding,
+)
 
 TRANSCRIPT = [
     {"role": "assistant", "content": "Hi, thanks for joining!"},
@@ -68,11 +76,13 @@ async def _analyse(
     user_id: uuid.UUID,
     session_factory: async_sessionmaker[AsyncSession],
     session_analysis_llm: FakeLLMClient,
+    embedder: FakeEmbeddingClient | None = None,
 ) -> dict[str, object]:
     return await build_analysis_graph().ainvoke(
         initial_analysis_state(session_id, user_id, "job_interview", TRANSCRIPT),
         context=AnalysisRuntimeContext(
             session_analysis_llm=session_analysis_llm,
+            embedder=embedder or FakeEmbeddingClient(),
             session_factory=session_factory,
         ),
     )
@@ -277,3 +287,55 @@ async def test_session_analysis_receives_the_transcript_as_data(
     (message,) = session_analysis_llm.requests[0].messages
     assert message.role == MessageRole.USER
     assert json.loads(message.content) == TRANSCRIPT
+
+
+async def _store_grammar_rule(
+    session: AsyncSession, skill_key: str, title: str, content: str
+) -> None:
+    entry = ContentEntry(
+        corpus=Corpus.GRAMMAR_REFERENCE,
+        skill_key=skill_key,
+        title=title,
+        content=content,
+    )
+    await ContentChunkRepositoryImpl(session).upsert_many(
+        [EmbeddedEntry(entry, fake_embedding(f"{title} {content}"), "embedding-model")]
+    )
+
+
+@pytest.mark.asyncio
+async def test_session_analysis_grounds_the_prompt_in_the_grammar_reference(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    await _store_grammar_rule(
+        session, "irregular_past_forms", "Irregular past", "go-went-gone"
+    )
+    llm = FakeLLMClient()
+    embedder = FakeEmbeddingClient()
+
+    await _analyse(session_id, user_id, session_factory, llm, embedder)
+
+    assert embedder.queries == ["Yesterday I go to the office."]
+    assert "- irregular_past_forms (Irregular past): go-went-gone" in (
+        llm.requests[0].system_instruction
+    )
+
+
+@pytest.mark.asyncio
+async def test_session_analysis_lists_the_active_weaknesses_in_the_prompt(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    await WeaknessRecordRepositoryImpl(session).create(
+        user_id, WeaknessCategory.GRAMMAR, "articles"
+    )
+    llm = FakeLLMClient()
+
+    await _analyse(session_id, user_id, session_factory, llm)
+
+    assert "articles (active)" in llm.requests[0].system_instruction

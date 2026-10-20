@@ -7,24 +7,19 @@ from analysis.schemas import SessionAnalysisResult
 from analysis.service import AnalysisService
 from llm.client import ChatMessage, MessageRole
 from orchestration.context import AnalysisRuntimeContext
+from orchestration.prompts import (
+    build_analysis_system_instruction,
+    build_grammar_reference_query,
+)
 from orchestration.state import AnalysisState
 from practice.repository import LearningSessionRepositoryImpl
-from scenarios.config import Scenario, get_scenario
+from rag.repository import ContentChunkRepositoryImpl
+from rag.service import ContentRetrievalService
+from scenarios.config import get_scenario
+from weaknesses.repository import WeaknessRecordRepositoryImpl
+from weaknesses.service import WeaknessService
 
-
-def _build_system_instruction(scenario: Scenario) -> str:
-    goals = "; ".join(scenario.goal_checklist)
-    return (
-        "Analyse the practice-conversation transcript the user sends as a JSON "
-        'list of turns. Judge only the turns whose role is "user" — those are '
-        "the learner's — for grammar, vocabulary, fluency and task completion. "
-        f"Score task completion against this checklist: {goals}.\n"
-        "Report 1-3 focus points, one observation per tracked skill (error or "
-        "clean use), and any new facts about the user worth remembering for "
-        "next time. Back every finding, observation and fact with the learner's "
-        "exact words from the transcript as evidence; leave out anything you "
-        "cannot quote."
-    )
+GRAMMAR_REFERENCE_LIMIT = 6
 
 
 def _transcript_messages(transcript: list[dict[str, str]]) -> list[ChatMessage]:
@@ -35,8 +30,23 @@ async def session_analysis_node(
     state: AnalysisState, *, runtime: Runtime[AnalysisRuntimeContext]
 ) -> dict[str, object]:
     scenario = get_scenario(state["scenario_id"])
+
+    async with runtime.context.session_factory() as session:
+        grammar_reference = await ContentRetrievalService(
+            ContentChunkRepositoryImpl(session), runtime.context.embedder
+        ).search_grammar_reference(
+            build_grammar_reference_query(state["transcript"]),
+            GRAMMAR_REFERENCE_LIMIT,
+        )
+        active_weaknesses = await WeaknessService(
+            WeaknessRecordRepositoryImpl(session),
+            LearningSessionRepositoryImpl(session),
+        ).get_active_weaknesses(state["user_id"])
+
     result = await runtime.context.session_analysis_llm.generate_structured(
-        _build_system_instruction(scenario),
+        build_analysis_system_instruction(
+            scenario, grammar_reference, active_weaknesses
+        ),
         _transcript_messages(state["transcript"]),
         SessionAnalysisResult,
     )

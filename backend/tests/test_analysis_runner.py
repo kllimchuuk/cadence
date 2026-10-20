@@ -13,7 +13,7 @@ from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
 
-from tests.fakes import FailingAnalysisLLMClient, FakeLLMClient
+from tests.fakes import FailingAnalysisLLMClient, FakeEmbeddingClient, FakeLLMClient
 
 TRANSCRIPT = [
     {"role": "assistant", "content": "Hi, thanks for joining!"},
@@ -52,6 +52,7 @@ def _runner(
         session_factory,
         AnalysisRuntimeContext(
             session_analysis_llm=session_analysis_llm,
+            embedder=FakeEmbeddingClient(),
             session_factory=session_factory,
         ),
         build_analysis_graph(),

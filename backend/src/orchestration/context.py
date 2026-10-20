@@ -17,4 +17,5 @@ class ConversationRuntimeContext:
 @dataclass
 class AnalysisRuntimeContext:
     session_analysis_llm: LLMClient
+    embedder: EmbeddingClient
     session_factory: async_sessionmaker[AsyncSession]
