@@ -64,7 +64,7 @@ async def test_recording_an_error_creates_an_active_record(
     service: WeaknessService, user_id: uuid.UUID, session_id: uuid.UUID
 ) -> None:
     record = await service.record_error(
-        user_id, WeaknessCategory.GRAMMAR, "past_perfect", session_id
+        user_id, WeaknessCategory.GRAMMAR, "tense_consistency", session_id
     )
 
     assert record.state == WeaknessState.ACTIVE
@@ -78,7 +78,7 @@ async def test_recording_an_error_for_an_unknown_session_raises_not_found(
 ) -> None:
     with pytest.raises(LearningSessionNotFoundError):
         await service.record_error(
-            user_id, WeaknessCategory.GRAMMAR, "past_perfect", uuid.uuid4()
+            user_id, WeaknessCategory.GRAMMAR, "tense_consistency", uuid.uuid4()
         )
 
 
@@ -91,16 +91,32 @@ async def test_recording_an_error_for_another_users_session_raises_not_found(
 ) -> None:
     with pytest.raises(LearningSessionNotFoundError):
         await service.record_error(
-            other_user_id, WeaknessCategory.GRAMMAR, "past_perfect", session_id
+            other_user_id, WeaknessCategory.GRAMMAR, "tense_consistency", session_id
         )
 
 
 @pytest.mark.asyncio
-async def test_recording_an_error_with_a_blank_skill_key_is_rejected(
+@pytest.mark.parametrize("skill_key", ["  ", "invented_by_the_model"])
+async def test_recording_an_error_with_an_unknown_skill_key_is_rejected(
+    service: WeaknessService,
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+    skill_key: str,
+) -> None:
+    with pytest.raises(InvalidSkillKeyError):
+        await service.record_error(
+            user_id, WeaknessCategory.GRAMMAR, skill_key, session_id
+        )
+
+
+@pytest.mark.asyncio
+async def test_recording_a_clean_use_with_an_unknown_skill_key_is_rejected(
     service: WeaknessService, user_id: uuid.UUID, session_id: uuid.UUID
 ) -> None:
     with pytest.raises(InvalidSkillKeyError):
-        await service.record_error(user_id, WeaknessCategory.GRAMMAR, "  ", session_id)
+        await service.record_clean_use(
+            user_id, WeaknessCategory.GRAMMAR, "invented_by_the_model", session_id
+        )
 
 
 @pytest.mark.asyncio
@@ -108,7 +124,7 @@ async def test_clean_use_for_a_never_erred_skill_is_a_no_op(
     service: WeaknessService, user_id: uuid.UUID, session_id: uuid.UUID
 ) -> None:
     result = await service.record_clean_use(
-        user_id, WeaknessCategory.GRAMMAR, "never_erred", session_id
+        user_id, WeaknessCategory.GRAMMAR, "modal_verbs", session_id
     )
 
     assert result is None

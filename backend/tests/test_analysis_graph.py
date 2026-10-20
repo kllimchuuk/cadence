@@ -37,8 +37,7 @@ TRANSCRIPT = [
     {"role": "assistant", "content": "Thanks for practising today."},
 ]
 PAST_SIMPLE_ERROR = SkillObservation(
-    category="grammar",
-    skill_key="past_simple",
+    skill_key="irregular_past_forms",
     outcome="error",
     evidence="Yesterday I go to the office.",
     note="Used present tense for a past event.",
@@ -113,8 +112,7 @@ async def test_session_analysis_writes_a_real_analysis_row(
                 focus_points=["Practice past-tense verbs"],
                 skill_observations=[
                     SkillObservation(
-                        category="grammar",
-                        skill_key="past_simple",
+                        skill_key="irregular_past_forms",
                         outcome="error",
                         evidence="Yesterday I go to the office.",
                         note="Used present tense for a past event.",
@@ -154,8 +152,7 @@ async def test_session_analysis_writes_a_real_analysis_row(
     }
     assert stored.skill_observations == [
         {
-            "category": "grammar",
-            "skill_key": "past_simple",
+            "skill_key": "irregular_past_forms",
             "outcome": "error",
             "evidence": "Yesterday I go to the office.",
             "note": "Used present tense for a past event.",
@@ -185,7 +182,7 @@ async def test_weakness_state_update_writes_a_real_weakness_record(
 
     weakness_repository = WeaknessRecordRepositoryImpl(session)
     record = await weakness_repository.get_by_user_and_skill(
-        user_id, WeaknessCategory.GRAMMAR, "past_simple"
+        user_id, WeaknessCategory.GRAMMAR, "irregular_past_forms"
     )
     assert record is not None
     assert record.state == WeaknessState.ACTIVE

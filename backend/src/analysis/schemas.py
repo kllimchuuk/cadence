@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from weaknesses.models import WeaknessCategory
+from weaknesses.skill_keys import GrammarSkillKey
 
 EVIDENCE_DESCRIPTION = "The learner's exact words from the transcript."
 
@@ -28,8 +28,7 @@ class TaskCompletion(BaseModel):
 
 
 class SkillObservation(BaseModel):
-    category: WeaknessCategory
-    skill_key: str
+    skill_key: GrammarSkillKey
     outcome: Literal["error", "clean"]
     evidence: str = Field(description=EVIDENCE_DESCRIPTION)
     note: str

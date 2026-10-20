@@ -67,6 +67,11 @@ def _load_grammar_reference(path: Path) -> list[ContentEntry]:
     ]
 
 
+def load_grammar_skill_keys(directory: Path = CONTENT_DIR) -> list[str]:
+    entries = _load_grammar_reference(directory / GRAMMAR_REFERENCE_FILE)
+    return [entry.skill_key for entry in entries if entry.skill_key]
+
+
 def load_corpus(directory: Path = CONTENT_DIR) -> list[ContentEntry]:
     return _load_scenario_content(
         directory / SCENARIO_CONTENT_FILE

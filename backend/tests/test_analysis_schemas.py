@@ -40,8 +40,7 @@ def test_more_than_three_focus_points_is_rejected() -> None:
 
 def test_a_skill_observation_without_evidence_is_rejected() -> None:
     observation = {
-        "category": "grammar",
-        "skill_key": "past_simple",
+        "skill_key": "irregular_past_forms",
         "outcome": "error",
         "note": "Used present tense for a past event.",
     }
