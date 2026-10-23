@@ -34,6 +34,15 @@ class SkillObservation(BaseModel):
     note: str
 
 
+class GrammarTriage(BaseModel):
+    skill_keys: list[GrammarSkillKey] = Field(
+        description=(
+            "Grammar skills in which the learner's turns show an error or a "
+            "clear correct use."
+        )
+    )
+
+
 class PersonaFact(BaseModel):
     fact: str
     evidence: str = Field(description=EVIDENCE_DESCRIPTION)

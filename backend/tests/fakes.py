@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from analysis.schemas import (
     FluencyAssessment,
+    GrammarTriage,
     PersonaFact,
     SessionAnalysisResult,
     SkillObservation,
@@ -47,9 +48,11 @@ class FakeLLMClient:
         self,
         reply: str = "Tell me more.",
         analysis: SessionAnalysisResult | None = None,
+        triaged_skill_keys: list[str] | None = None,
     ) -> None:
         self._reply = reply
         self._analysis = analysis or analysis_result()
+        self._triage = GrammarTriage(skill_keys=triaged_skill_keys or [])
         self.requests: list[LLMRequest] = []
 
     async def stream(
@@ -64,8 +67,10 @@ class FakeLLMClient:
         system_instruction: str,
         messages: Sequence[ChatMessage],
         schema: type,
-    ) -> SessionAnalysisResult:
+    ) -> SessionAnalysisResult | GrammarTriage:
         self.requests.append(LLMRequest(system_instruction, tuple(messages)))
+        if schema is GrammarTriage:
+            return self._triage
         return self._analysis
 
 

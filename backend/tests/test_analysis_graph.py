@@ -32,12 +32,7 @@ from users.repository import UserRepositoryImpl
 from weaknesses.models import WeaknessCategory, WeaknessState
 from weaknesses.repository import WeaknessRecordRepositoryImpl
 
-from tests.fakes import (
-    FakeEmbeddingClient,
-    FakeLLMClient,
-    analysis_result,
-    fake_embedding,
-)
+from tests.fakes import FakeLLMClient, analysis_result, fake_embedding
 
 TRANSCRIPT = [
     {"role": "assistant", "content": "Hi, thanks for joining!"},
@@ -76,13 +71,11 @@ async def _analyse(
     user_id: uuid.UUID,
     session_factory: async_sessionmaker[AsyncSession],
     session_analysis_llm: FakeLLMClient,
-    embedder: FakeEmbeddingClient | None = None,
 ) -> dict[str, object]:
     return await build_analysis_graph().ainvoke(
         initial_analysis_state(session_id, user_id, "job_interview", TRANSCRIPT),
         context=AnalysisRuntimeContext(
             session_analysis_llm=session_analysis_llm,
-            embedder=embedder or FakeEmbeddingClient(),
             session_factory=session_factory,
         ),
     )
@@ -269,7 +262,7 @@ async def test_session_analysis_prompt_includes_the_scenarios_goal_checklist(
 
     await _analyse(session_id, user_id, session_factory, session_analysis_llm)
 
-    system_instruction = session_analysis_llm.requests[0].system_instruction
+    system_instruction = session_analysis_llm.requests[1].system_instruction
     for goal in get_scenario("job_interview").goal_checklist:
         assert goal in system_instruction
 
@@ -284,9 +277,10 @@ async def test_session_analysis_receives_the_transcript_as_data(
 
     await _analyse(session_id, user_id, session_factory, session_analysis_llm)
 
-    (message,) = session_analysis_llm.requests[0].messages
-    assert message.role == MessageRole.USER
-    assert json.loads(message.content) == TRANSCRIPT
+    for request in session_analysis_llm.requests:
+        (message,) = request.messages
+        assert message.role == MessageRole.USER
+        assert json.loads(message.content) == TRANSCRIPT
 
 
 async def _store_grammar_rule(
@@ -304,7 +298,22 @@ async def _store_grammar_rule(
 
 
 @pytest.mark.asyncio
-async def test_session_analysis_grounds_the_prompt_in_the_grammar_reference(
+async def test_session_analysis_classifies_the_grammar_before_the_full_analysis(
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    llm = FakeLLMClient()
+
+    await _analyse(session_id, user_id, session_factory, llm)
+
+    triage, analysis = llm.requests
+    assert "List every grammar skill" in triage.system_instruction
+    assert "List every grammar skill" not in analysis.system_instruction
+
+
+@pytest.mark.asyncio
+async def test_session_analysis_grounds_the_prompt_in_the_classified_rules_only(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
@@ -313,19 +322,49 @@ async def test_session_analysis_grounds_the_prompt_in_the_grammar_reference(
     await _store_grammar_rule(
         session, "irregular_past_forms", "Irregular past", "go-went-gone"
     )
-    llm = FakeLLMClient()
-    embedder = FakeEmbeddingClient()
+    await _store_grammar_rule(session, "articles", "Articles", "a, an, the")
+    llm = FakeLLMClient(triaged_skill_keys=["irregular_past_forms"])
 
-    await _analyse(session_id, user_id, session_factory, llm, embedder)
+    await _analyse(session_id, user_id, session_factory, llm)
 
-    assert embedder.queries == ["Yesterday I go to the office."]
-    assert "- irregular_past_forms (Irregular past): go-went-gone" in (
-        llm.requests[0].system_instruction
-    )
+    instruction = llm.requests[1].system_instruction
+    assert "- irregular_past_forms (Irregular past): go-went-gone" in instruction
+    assert "articles" not in instruction
 
 
 @pytest.mark.asyncio
-async def test_session_analysis_lists_the_active_weaknesses_in_the_prompt(
+async def test_session_analysis_always_includes_the_rules_of_tracked_skills(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    await _store_grammar_rule(session, "articles", "Articles", "a, an, the")
+    await WeaknessRecordRepositoryImpl(session).create(
+        user_id, WeaknessCategory.GRAMMAR, "articles"
+    )
+    llm = FakeLLMClient(triaged_skill_keys=[])
+
+    await _analyse(session_id, user_id, session_factory, llm)
+
+    assert "- articles (Articles): a, an, the" in llm.requests[1].system_instruction
+
+
+@pytest.mark.asyncio
+async def test_session_analysis_without_classified_skills_has_no_reference_block(
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    llm = FakeLLMClient(triaged_skill_keys=[])
+
+    await _analyse(session_id, user_id, session_factory, llm)
+
+    assert "<grammar_reference>" not in llm.requests[1].system_instruction
+
+
+@pytest.mark.asyncio
+async def test_session_analysis_lists_the_active_weaknesses_in_both_prompts(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     user_id: uuid.UUID,
@@ -338,4 +377,5 @@ async def test_session_analysis_lists_the_active_weaknesses_in_the_prompt(
 
     await _analyse(session_id, user_id, session_factory, llm)
 
-    assert "articles (active)" in llm.requests[0].system_instruction
+    for request in llm.requests:
+        assert "articles (active)" in request.system_instruction

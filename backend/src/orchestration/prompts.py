@@ -6,6 +6,12 @@ from rag.models import ContentChunk
 from scenarios.config import Scenario
 from weaknesses.models import WeaknessRecord
 
+TRANSCRIPT_BRIEF = (
+    "Read the practice-conversation transcript the user sends as a JSON list "
+    'of turns. Judge only the turns whose role is "user" — those are the '
+    "learner's."
+)
+
 OPENING_CUE = (
     "(The learner has just joined. Greet them in character and invite them to "
     "begin whenever they're ready.)"
@@ -17,12 +23,6 @@ def build_scenario_content_query(
 ) -> str:
     facts = persona_memory.facts if persona_memory is not None else []
     return ". ".join([*facts, *scenario.goal_checklist])
-
-
-def build_grammar_reference_query(transcript: list[dict[str, str]]) -> str:
-    return "\n".join(
-        entry["content"] for entry in transcript if entry["role"] == MessageRole.USER
-    )
 
 
 def build_persona_system_prompt(
@@ -55,6 +55,28 @@ def build_persona_system_prompt(
     return "\n".join(lines)
 
 
+def _describe_tracked_skills(active_weaknesses: Sequence[WeaknessRecord]) -> str:
+    return "; ".join(f"{w.skill_key} ({w.state})" for w in active_weaknesses)
+
+
+def build_grammar_triage_instruction(
+    active_weaknesses: Sequence[WeaknessRecord],
+) -> str:
+    lines = [
+        TRANSCRIPT_BRIEF,
+        "List every grammar skill in which those turns show an error or a "
+        "clear correct use. Include a skill only if you can point to the "
+        "learner's exact words for it.",
+    ]
+    if active_weaknesses:
+        lines.append(
+            "These skills are already tracked for this learner: "
+            + _describe_tracked_skills(active_weaknesses)
+            + ". Include each one the learner's turns touch."
+        )
+    return "\n".join(lines)
+
+
 def build_analysis_system_instruction(
     scenario: Scenario,
     grammar_reference: Sequence[ContentChunk],
@@ -62,10 +84,8 @@ def build_analysis_system_instruction(
 ) -> str:
     goals = "; ".join(scenario.goal_checklist)
     lines = [
-        "Analyse the practice-conversation transcript the user sends as a JSON "
-        'list of turns. Judge only the turns whose role is "user" — those are '
-        "the learner's — for grammar, vocabulary, fluency and task completion. "
-        f"Score task completion against this checklist: {goals}.",
+        f"{TRANSCRIPT_BRIEF} Assess grammar, vocabulary, fluency and task "
+        f"completion. Score task completion against this checklist: {goals}.",
         "Report 1-3 focus points, one observation per tracked grammar skill "
         "(error or clean use), and any new facts about the user worth "
         "remembering for next time. Back every finding, observation and fact "
@@ -87,7 +107,7 @@ def build_analysis_system_instruction(
     if active_weaknesses:
         lines.append(
             "These skills are already tracked for this learner: "
-            + "; ".join(f"{w.skill_key} ({w.state})" for w in active_weaknesses)
+            + _describe_tracked_skills(active_weaknesses)
             + ". For each one the learner's turns touch, report an error "
             "observation if they slipped or a clean observation if they used "
             "it correctly."

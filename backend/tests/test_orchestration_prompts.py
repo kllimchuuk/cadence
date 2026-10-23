@@ -2,13 +2,14 @@ import uuid
 
 from orchestration.prompts import (
     build_analysis_system_instruction,
-    build_grammar_reference_query,
+    build_grammar_triage_instruction,
     build_persona_system_prompt,
     build_scenario_content_query,
 )
 from persona.models import PersonaMemory
 from rag.models import ContentChunk
 from scenarios.config import get_scenario
+from weaknesses.models import WeaknessRecord, WeaknessState
 
 
 def _persona_memory(facts: list[str]) -> PersonaMemory:
@@ -103,17 +104,19 @@ def test_the_scenario_content_query_without_memory_is_just_the_goals() -> None:
     assert query == ". ".join(scenario.goal_checklist)
 
 
-def test_the_grammar_reference_query_is_only_the_learners_turns() -> None:
-    transcript = [
-        {"role": "assistant", "content": "Tell me about yourself."},
-        {"role": "user", "content": "I work as developer."},
-        {"role": "assistant", "content": "Great."},
-        {"role": "user", "content": "Yesterday I go home."},
-    ]
+def test_the_triage_instruction_judges_only_the_learners_turns() -> None:
+    instruction = build_grammar_triage_instruction([])
 
-    assert build_grammar_reference_query(transcript) == (
-        "I work as developer.\nYesterday I go home."
-    )
+    assert 'whose role is "user"' in instruction
+    assert "already tracked" not in instruction
+
+
+def test_the_triage_instruction_names_the_tracked_skills() -> None:
+    weakness = WeaknessRecord(skill_key="articles", state=WeaknessState.PROBATION)
+
+    instruction = build_grammar_triage_instruction([weakness])
+
+    assert "articles (probation)" in instruction
 
 
 def test_the_analysis_instruction_fences_the_grammar_reference_as_data() -> None:

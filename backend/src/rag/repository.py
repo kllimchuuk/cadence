@@ -4,6 +4,7 @@ from collections.abc import Collection, Sequence
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from rag.entries import EmbeddedEntry
 from rag.models import ContentChunk, Corpus
@@ -20,6 +21,12 @@ class ContentChunkRepository(ABC):
 
     @abstractmethod
     async def delete_except(self, content_hashes: Collection[str]) -> int:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_grammar_rules(
+        self, skill_keys: Collection[str]
+    ) -> list[ContentChunk]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -77,6 +84,20 @@ class ContentChunkRepositoryImpl(ContentChunkRepository):
             delete(ContentChunk).where(ContentChunk.content_hash.not_in(content_hashes))
         )
         return result.rowcount
+
+    async def get_grammar_rules(
+        self, skill_keys: Collection[str]
+    ) -> list[ContentChunk]:
+        result = await self._session.execute(
+            select(ContentChunk)
+            .options(defer(ContentChunk.embedding))
+            .where(
+                ContentChunk.corpus == Corpus.GRAMMAR_REFERENCE,
+                ContentChunk.skill_key.in_(skill_keys),
+            )
+            .order_by(ContentChunk.skill_key)
+        )
+        return list(result.scalars())
 
     async def search(
         self,

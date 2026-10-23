@@ -135,3 +135,22 @@ async def test_search_is_restricted_to_the_scenario_and_honours_the_limit(
 
     assert len(results) == 1
     assert results[0].scenario_id == "job_interview"
+
+
+@pytest.mark.asyncio
+async def test_get_grammar_rules_ignores_scenario_content_and_unknown_keys(
+    repository: ContentChunkRepository,
+) -> None:
+    await repository.upsert_many(
+        [
+            _embedded(_grammar_entry("articles", "a an the")),
+            _embedded(_grammar_entry("modal_verbs", "can should must")),
+            _embedded(_scenario_entry("job_interview", "articles", "a an the")),
+        ]
+    )
+
+    rules = await repository.get_grammar_rules({"articles", "no_such_skill"})
+
+    assert [(rule.corpus, rule.skill_key) for rule in rules] == [
+        (Corpus.GRAMMAR_REFERENCE, "articles")
+    ]

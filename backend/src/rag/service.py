@@ -1,3 +1,5 @@
+from collections.abc import Collection
+
 from rag.embeddings import EmbeddingClient
 from rag.models import ContentChunk, Corpus
 from rag.repository import ContentChunkRepository
@@ -20,11 +22,10 @@ class ContentRetrievalService:
             scenario_id=scenario_id,
         )
 
-    async def search_grammar_reference(
-        self, query: str, limit: int
-    ) -> list[ContentChunk]:
-        if not query.strip():
-            return []
-        return await self._repository.search(
-            Corpus.GRAMMAR_REFERENCE, await self._embedder.embed_query(query), limit
-        )
+
+class GrammarReferenceService:
+    def __init__(self, repository: ContentChunkRepository) -> None:
+        self._repository = repository
+
+    async def get_rules(self, skill_keys: Collection[str]) -> list[ContentChunk]:
+        return await self._repository.get_grammar_rules(skill_keys)
