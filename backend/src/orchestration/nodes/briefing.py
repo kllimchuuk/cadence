@@ -20,7 +20,7 @@ from rag.repository import ContentChunkRepositoryImpl
 from rag.service import ContentRetrievalService
 from scenarios.config import Scenario, get_scenario
 
-SCENARIO_CONTENT_LIMIT = 5
+SCENARIO_CONTENT_LIMIT = 10
 SCENARIO_CONTENT_TIMEOUT_SECONDS = 5
 
 logger = logging.getLogger(__name__)

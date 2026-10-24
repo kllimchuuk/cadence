@@ -1,3 +1,4 @@
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ from rag.corpus import (
     SCENARIO_CONTENT_FILE,
     load_corpus,
 )
+from orchestration.nodes.briefing import SCENARIO_CONTENT_LIMIT
 from rag.exceptions import CorpusFileError
 from rag.models import Corpus
 from scenarios.exceptions import UnknownScenarioError
@@ -44,6 +46,14 @@ def test_the_shipped_corpus_covers_every_scenario_and_has_grammar_rules() -> Non
     assert all(e.skill_key for e in grammar_entries)
     assert all(e.scenario_id is None for e in grammar_entries)
     assert all(e.skill_key is None for e in scenario_entries)
+
+
+def test_the_briefing_limit_covers_every_scenarios_whole_content() -> None:
+    entries_per_scenario = Counter(
+        e.scenario_id for e in load_corpus() if e.corpus == Corpus.SCENARIO_CONTENT
+    )
+
+    assert max(entries_per_scenario.values()) <= SCENARIO_CONTENT_LIMIT
 
 
 def test_no_two_entries_of_the_shipped_corpus_are_identical() -> None:
