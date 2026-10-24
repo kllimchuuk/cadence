@@ -1,15 +1,11 @@
-import asyncio
-from collections.abc import AsyncIterator, Awaitable, Sequence
-from http import HTTPStatus
-from typing import TypeVar
+from collections.abc import AsyncIterator, Sequence
 
 from google import genai
-from google.genai import errors, types
+from google.genai import types
 
 from llm.client import ChatMessage, MessageRole, SchemaT
-from llm.exceptions import LLMResponseError, LLMUnavailableError
-
-ResultT = TypeVar("ResultT")
+from llm.exceptions import LLMResponseError
+from llm.gemini_call import call_gemini
 
 _GEMINI_ROLES = {MessageRole.USER: "user", MessageRole.ASSISTANT: "model"}
 
@@ -34,13 +30,6 @@ def _diagnose(response: types.GenerateContentResponse | None) -> str:
     return "no candidates returned"
 
 
-def _is_transient(error: errors.APIError) -> bool:
-    return (
-        error.code == HTTPStatus.TOO_MANY_REQUESTS
-        or error.code >= HTTPStatus.INTERNAL_SERVER_ERROR
-    )
-
-
 class GeminiClient:
     def __init__(
         self, client: genai.Client, model: str, timeout_seconds: float
@@ -52,14 +41,15 @@ class GeminiClient:
     async def stream(
         self, system_instruction: str, messages: Sequence[ChatMessage]
     ) -> AsyncIterator[str]:
-        chunks = await self._call(
+        chunks = await call_gemini(
             self._client.aio.models.generate_content_stream(
                 model=self._model,
                 contents=_to_contents(messages),
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction
                 ),
-            )
+            ),
+            self._timeout_seconds,
         )
         last_chunk = None
         produced_text = False
@@ -77,7 +67,7 @@ class GeminiClient:
         messages: Sequence[ChatMessage],
         schema: type[SchemaT],
     ) -> SchemaT:
-        response = await self._call(
+        response = await call_gemini(
             self._client.aio.models.generate_content(
                 model=self._model,
                 contents=_to_contents(messages),
@@ -86,7 +76,8 @@ class GeminiClient:
                     response_mime_type="application/json",
                     response_schema=schema,
                 ),
-            )
+            ),
+            self._timeout_seconds,
         )
         if response.parsed is None:
             raise LLMResponseError(
@@ -98,19 +89,6 @@ class GeminiClient:
         self, chunks: AsyncIterator[types.GenerateContentResponse]
     ) -> types.GenerateContentResponse | None:
         try:
-            return await self._call(anext(chunks))
+            return await call_gemini(anext(chunks), self._timeout_seconds)
         except StopAsyncIteration:
             return None
-
-    async def _call(self, request: Awaitable[ResultT]) -> ResultT:
-        try:
-            async with asyncio.timeout(self._timeout_seconds):
-                return await request
-        except TimeoutError as error:
-            raise LLMUnavailableError(
-                f"no response within {self._timeout_seconds}s"
-            ) from error
-        except errors.APIError as error:
-            if _is_transient(error):
-                raise LLMUnavailableError(f"{error.code} {error.status}") from error
-            raise

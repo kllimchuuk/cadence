@@ -33,6 +33,7 @@ def get_conversation_runtime_context(
     return ConversationRuntimeContext(
         briefing_llm=llm_factory.create(settings.GEMINI_MODEL),
         conversing_llm=llm_factory.create(settings.GEMINI_MODEL),
+        embedder=llm_factory.create_embedding_client(settings.GEMINI_EMBEDDING_MODEL),
         session_factory=session_factory,
     )
 

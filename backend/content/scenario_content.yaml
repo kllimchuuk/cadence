@@ -1,0 +1,220 @@
+job_interview:
+  - title: Walk me through your background
+    content: >-
+      Opening question: "Could you walk me through your background and what
+      brought you to this role?" Follow up on whichever job the candidate
+      spends the least time on: "You mentioned that quickly. What was your
+      day-to-day there?"
+  - title: Most challenging project
+    content: >-
+      "Tell me about the most challenging project you've worked on. What made
+      it hard, and what was your specific contribution?" If the answer says
+      "we" throughout, ask: "What did you personally decide or build?"
+  - title: Handling a production incident
+    content: >-
+      "Describe a time something broke in production. How did you find the
+      cause, and what changed afterwards so it wouldn't happen again?"
+      Useful phrases for the candidate: "root cause", "roll back", "post-mortem".
+  - title: Disagreeing with a teammate
+    content: >-
+      "Tell me about a time you disagreed with a colleague on a technical
+      decision. How did you handle it?" Listen for whether the candidate
+      explains the other person's view fairly.
+  - title: Probing a technical claim
+    content: >-
+      When the candidate states a technical result, probe it: "You said you
+      improved performance. By how much, and how did you measure it?" or "Why
+      did you choose that approach over the alternatives?"
+  - title: Strengths and weaknesses
+    content: >-
+      "What would your previous manager say is your biggest strength, and
+      what is one thing you're actively working to improve?" Accept a real
+      weakness with a concrete step, not a disguised strength.
+  - title: Why this company
+    content: >-
+      "What attracted you to our team specifically?" Follow up: "What would
+      you want to learn in your first six months here?"
+  - title: Closing and candidate questions
+    content: >-
+      Closing: "That's all from my side. What questions do you have for me?"
+      If the candidate has none, prompt: "Anything about the team, the
+      stack, or how we work?" Then explain the next steps and the timeline.
+daily_standup:
+  - title: Standard stand-up format
+    content: >-
+      "Let's go around. What did you do yesterday, what are you doing today,
+      and is anything blocking you?" Keep it to about a minute per person
+      and steer long answers back: "Let's take the details offline."
+  - title: Yesterday report phrases
+    content: >-
+      Natural phrasing for yesterday: "I finished the login endpoint", "I
+      spent most of the day debugging a flaky test", "I got the pull request
+      reviewed and merged", "I didn't get to the migration, it took longer
+      than expected."
+  - title: Today plan phrases
+    content: >-
+      Natural phrasing for today: "I'm going to pick up the payment ticket",
+      "I plan to finish the review and then start on the report", "I'll
+      pair with Dana on the deployment script."
+  - title: Raising a blocker
+    content: >-
+      Natural phrasing for blockers: "I'm blocked on access to the staging
+      database", "I'm waiting for a review from the platform team", "I'm
+      not blocked, but I could use a second opinion on the design." Ask:
+      "Who can unblock you, and by when?"
+  - title: Vague update follow-up
+    content: >-
+      When an update is vague ("I worked on some stuff"), ask a short
+      follow-up: "Which ticket was that?" or "Is that finished or still in
+      progress?"
+  - title: Estimates slipping
+    content: >-
+      "That was estimated for Tuesday. Is it still on track?" The learner
+      should explain the delay briefly: "It's taking longer because the API
+      changed, so I'd now say Thursday."
+  - title: Helping a teammate
+    content: >-
+      "Does anyone have capacity to help with the release checklist?"
+      Phrases for offering or declining help: "I can take that after lunch",
+      "I'm tied up today, but I can look tomorrow."
+client_call:
+  - title: Opening a status call
+    content: >-
+      "Thanks for making time. Can you give me a quick overview of where the
+      project stands?" The client prefers plain language: "What does that
+      mean for us, in simple terms?"
+  - title: Explaining progress without jargon
+    content: >-
+      Phrases for non-technical progress: "The main screens are built and
+      we're now testing them", "About two thirds of the work is done",
+      "We finished the part users will see first." Client reaction: "So can I
+      start showing this to my team?"
+  - title: Delay and risk
+    content: >-
+      "I heard the date might move. Is that true?" The learner should be
+      honest: "Yes, one part took longer than planned. We expect it to cost
+      about a week." Useful: "the risk is", "to be transparent", "what we
+      are doing about it".
+  - title: Anxious about the timeline
+    content: >-
+      "I need a firm date for the board meeting. Can you promise the end of
+      the month?" Teach hedging with commitment: "I can commit to the
+      first version by the 28th; the extra reports would follow."
+  - title: Scope change request
+    content: >-
+      "Can we also add a dashboard for my managers?" The learner should
+      respond without simply saying yes or no: "We can do that. It adds about
+      two weeks, so we'd need to choose what moves."
+  - title: Budget question
+    content: >-
+      "Are we still within budget?" Phrases: "We're on budget so far", "we've
+      used about 60 percent", "I'd flag one item that may go over."
+  - title: Confirming next steps
+    content: >-
+      Close the call: "So to confirm, the next milestone is the beta on the
+      15th, and you'll send feedback by Friday?" Practise summarising:
+      "Just to recap, ..." and "I'll send a written summary today."
+small_talk_networking:
+  - title: Introducing yourself at a meetup
+    content: >-
+      Opening: "Hi, I don't think we've met. I'm Jordan. What do you do?"
+      Natural replies: "I work as a backend developer at a small startup",
+      "I'm moving from backend into AI engineering."
+  - title: Asking about the other person
+    content: >-
+      Open follow-ups: "How did you get into that?", "What's the most
+      interesting thing you're working on right now?", "How long have you
+      been in the field?"
+  - title: Finding a shared topic
+    content: >-
+      "Oh, you use Python too? What do you mostly build with it?" Shared
+      topics to steer towards: tools, conferences, side projects, cities,
+      commute, how people learned English.
+  - title: Talk of the event
+    content: >-
+      "What did you think of the first talk?" Phrases for opinions: "I found
+      it a bit too basic", "The demo was impressive", "I'd like to hear more
+      about how they handle testing."
+  - title: Keeping the conversation going
+    content: >-
+      When the answer is short, use a follow-up: "Really? Tell me more about
+      that." or "That's interesting, why did you choose that?" Avoid yes/no
+      questions.
+  - title: Polite exit
+    content: >-
+      Ending a conversation: "It was great talking to you", "I should go and
+      say hi to a few people", "Let's connect on LinkedIn." Jordan answers:
+      "Definitely, nice meeting you!"
+  - title: Where are you from
+    content: >-
+      "Where are you based?" and "How long have you been here?" are safe
+      openers. Follow up with "What do you like most about living there?"
+presentation_qa:
+  - title: Opening the Q&A
+    content: >-
+      "Thanks for the talk. I have a question about your results." Morgan
+      starts polite and gets pointed: "How does that hold up outside of your
+      test data?"
+  - title: Clarifying a question
+    content: >-
+      If a question is unclear, the presenter should clarify instead of
+      guessing: "Just to make sure I understand, are you asking about cost or
+      performance?" and "Could you give an example?"
+  - title: Challenging a claim
+    content: >-
+      "You said this approach is faster. Faster than what, and on what
+      workload?" The presenter should stay composed: "That's a fair point.
+      We measured against the previous version, on production-like data."
+  - title: Admitting a limitation
+    content: >-
+      "Doesn't this break when the dataset grows?" Honest answers: "That's a
+      limitation we haven't solved yet", "We haven't tested at that scale",
+      "I don't have that number with me, but I can follow up."
+  - title: Follow-up question
+    content: >-
+      After an answer, Morgan follows up: "So what would you do differently
+      if you started again?" or "What was the main trade-off you accepted?"
+  - title: Answering directly first
+    content: >-
+      The presenter should answer first, then elaborate: "Yes, it does.
+      The reason is..." not a long preamble. Morgan interrupts politely if
+      the answer wanders: "Sorry, but what's the short answer?"
+  - title: Wrapping up
+    content: >-
+      Close: "We have time for one more question." and "Thank you, that was
+      helpful." Phrases for the presenter: "Thanks for the question",
+      "Happy to discuss it further after the session."
+phone_booking:
+  - title: Opening the call
+    content: >-
+      Receptionist greeting: "Good morning, Riverside Dental, Taylor
+      speaking. How can I help you?" The caller states the purpose: "Hello,
+      I'd like to book an appointment for a check-up."
+  - title: Agreeing a date and time
+    content: >-
+      "What day works best for you?" "Do you prefer mornings or afternoons?"
+      "I have Thursday at 10:30 or Friday at 2 o'clock." Caller phrases: "Thursday
+      works for me", "Would anything earlier in the week be available?"
+  - title: Giving contact details
+    content: >-
+      "Can I take your name and a contact number?" Practise spelling
+      aloud: "That's B-R-O-W-N", and reading numbers
+      in groups: "oh seven nine, four five..."
+  - title: Confirming back
+    content: >-
+      Taylor repeats details: "So that's Thursday the 14th at 10:30 for
+      Mr Brown, and your number is...?" The caller confirms or corrects: "Yes,
+      that's right" or "Sorry, it's the 15th, not the 14th."
+  - title: Asking for a repeat
+    content: >-
+      On a bad line: "Sorry, could you repeat that?", "Could you spell that
+      for me?", "I didn't catch the time." Taylor may also ask: "Could you
+      speak a little slower, please?"
+  - title: Rescheduling or cancelling
+    content: >-
+      "I'm afraid I can't make that time. Could we move it to next week?"
+      Taylor: "Of course. Let me check what we have available."
+  - title: Ending the call
+    content: >-
+      Closing: "Is there anything else I can help you with?" "Thank you for
+      calling, we'll see you on Thursday." Caller: "Thanks very much, goodbye."

@@ -1,46 +1,72 @@
 import json
+import uuid
+from collections.abc import Collection, Sequence
 
 from langgraph.runtime import Runtime
 
 from analysis.repository import SessionAnalysisRepositoryImpl
-from analysis.schemas import SessionAnalysisResult
+from analysis.schemas import GrammarTriage, SessionAnalysisResult
 from analysis.service import AnalysisService
 from llm.client import ChatMessage, MessageRole
 from orchestration.context import AnalysisRuntimeContext
+from orchestration.prompts import (
+    build_analysis_system_instruction,
+    build_grammar_triage_instruction,
+)
 from orchestration.state import AnalysisState
 from practice.repository import LearningSessionRepositoryImpl
-from scenarios.config import Scenario, get_scenario
-
-
-def _build_system_instruction(scenario: Scenario) -> str:
-    goals = "; ".join(scenario.goal_checklist)
-    return (
-        "Analyse the practice-conversation transcript the user sends as a JSON "
-        'list of turns. Judge only the turns whose role is "user" — those are '
-        "the learner's — for grammar, vocabulary, fluency and task completion. "
-        f"Score task completion against this checklist: {goals}.\n"
-        "Report 1-3 focus points, one observation per tracked skill (error or "
-        "clean use), and any new facts about the user worth remembering for "
-        "next time. Back every finding, observation and fact with the learner's "
-        "exact words from the transcript as evidence; leave out anything you "
-        "cannot quote."
-    )
+from rag.models import ContentChunk
+from rag.repository import ContentChunkRepositoryImpl
+from rag.service import GrammarReferenceService
+from scenarios.config import get_scenario
+from weaknesses.models import WeaknessRecord
+from weaknesses.repository import WeaknessRecordRepositoryImpl
+from weaknesses.service import WeaknessService
 
 
 def _transcript_messages(transcript: list[dict[str, str]]) -> list[ChatMessage]:
     return [ChatMessage(MessageRole.USER, json.dumps(transcript, ensure_ascii=False))]
 
 
-async def session_analysis_node(
-    state: AnalysisState, *, runtime: Runtime[AnalysisRuntimeContext]
-) -> dict[str, object]:
-    scenario = get_scenario(state["scenario_id"])
-    result = await runtime.context.session_analysis_llm.generate_structured(
-        _build_system_instruction(scenario),
-        _transcript_messages(state["transcript"]),
-        SessionAnalysisResult,
-    )
+async def _load_active_weaknesses(
+    runtime: Runtime[AnalysisRuntimeContext], user_id: uuid.UUID
+) -> list[WeaknessRecord]:
+    async with runtime.context.session_factory() as session:
+        return await WeaknessService(
+            WeaknessRecordRepositoryImpl(session),
+            LearningSessionRepositoryImpl(session),
+        ).get_active_weaknesses(user_id)
 
+
+async def _load_grammar_rules(
+    runtime: Runtime[AnalysisRuntimeContext], skill_keys: Collection[str]
+) -> list[ContentChunk]:
+    async with runtime.context.session_factory() as session:
+        return await GrammarReferenceService(
+            ContentChunkRepositoryImpl(session)
+        ).get_rules(skill_keys)
+
+
+async def _retrieve_grammar_reference(
+    runtime: Runtime[AnalysisRuntimeContext],
+    messages: Sequence[ChatMessage],
+    active_weaknesses: Sequence[WeaknessRecord],
+) -> list[ContentChunk]:
+    triage = await runtime.context.session_analysis_llm.generate_structured(
+        build_grammar_triage_instruction(active_weaknesses),
+        messages,
+        GrammarTriage,
+    )
+    skill_keys = {key.value for key in triage.skill_keys}
+    skill_keys.update(weakness.skill_key for weakness in active_weaknesses)
+    return await _load_grammar_rules(runtime, skill_keys)
+
+
+async def _save_analysis(
+    runtime: Runtime[AnalysisRuntimeContext],
+    state: AnalysisState,
+    result: SessionAnalysisResult,
+) -> None:
     async with runtime.context.session_factory() as session:
         analysis_service = AnalysisService(
             SessionAnalysisRepositoryImpl(session),
@@ -50,6 +76,26 @@ async def session_analysis_node(
             state["session_id"], state["user_id"], result
         )
         await session.commit()
+
+
+async def session_analysis_node(
+    state: AnalysisState, *, runtime: Runtime[AnalysisRuntimeContext]
+) -> dict[str, object]:
+    scenario = get_scenario(state["scenario_id"])
+    messages = _transcript_messages(state["transcript"])
+    active_weaknesses = await _load_active_weaknesses(runtime, state["user_id"])
+    grammar_reference = await _retrieve_grammar_reference(
+        runtime, messages, active_weaknesses
+    )
+
+    result = await runtime.context.session_analysis_llm.generate_structured(
+        build_analysis_system_instruction(
+            scenario, grammar_reference, active_weaknesses
+        ),
+        messages,
+        SessionAnalysisResult,
+    )
+    await _save_analysis(runtime, state, result)
 
     return {
         "skill_observations": [

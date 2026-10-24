@@ -8,6 +8,7 @@ from practice.repository import LearningSessionRepository, get_practice_reposito
 from weaknesses.exceptions import InvalidSkillKeyError
 from weaknesses.models import WeaknessCategory, WeaknessRecord, WeaknessState
 from weaknesses.repository import WeaknessRecordRepository, get_weakness_repository
+from weaknesses.skill_keys import GrammarSkillKey
 
 _CLEAN_STREAK_TO_ADVANCE = 3
 
@@ -83,8 +84,10 @@ class WeaknessService:
 
     @staticmethod
     def _require_valid_skill_key(skill_key: str) -> None:
-        if not skill_key.strip():
-            raise InvalidSkillKeyError()
+        try:
+            GrammarSkillKey(skill_key)
+        except ValueError as error:
+            raise InvalidSkillKeyError() from error
 
     @staticmethod
     def _advance(state: WeaknessState, streak: int) -> tuple[WeaknessState, int]:

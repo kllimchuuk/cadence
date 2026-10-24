@@ -20,7 +20,7 @@ from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
 from users.repository import UserRepositoryImpl
 
-from tests.fakes import FakeLLMClient, FlakyLLMClient
+from tests.fakes import FakeEmbeddingClient, FakeLLMClient, FlakyLLMClient
 from tests.helpers import run_graph_to_completion
 
 
@@ -51,6 +51,7 @@ def _context(
     return ConversationRuntimeContext(
         briefing_llm=briefing_llm,
         conversing_llm=conversing_llm,
+        embedder=FakeEmbeddingClient(),
         session_factory=session_factory,
     )
 
