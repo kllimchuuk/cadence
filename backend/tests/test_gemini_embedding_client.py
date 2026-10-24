@@ -90,13 +90,16 @@ async def test_each_document_is_sent_as_its_own_content_with_the_document_prefix
     models = _FakeModels()
 
     vectors = await _client(models).embed_documents(
-        [EmbeddingDocument("Past simple", "Use -ed."), EmbeddingDocument(None, "Hi.")]
+        [
+            EmbeddingDocument("Past simple", "Use -ed."),
+            EmbeddingDocument("Greeting", "Hi."),
+        ]
     )
 
     assert len(vectors) == 2
     assert _texts(models.requests[0]) == [
         "title: Past simple | text: Use -ed.",
-        "title: none | text: Hi.",
+        "title: Greeting | text: Hi.",
     ]
 
 
@@ -130,7 +133,7 @@ async def test_the_vector_is_truncated_to_the_column_dimension_without_a_task_ty
 async def test_documents_are_split_into_requests_of_the_api_limit() -> None:
     models = _FakeModels()
     documents = [
-        EmbeddingDocument(None, f"text {number}")
+        EmbeddingDocument("Title", f"text {number}")
         for number in range(MAX_DOCUMENTS_PER_REQUEST + 1)
     ]
 
@@ -157,7 +160,7 @@ async def test_fewer_embeddings_than_documents_is_a_response_error() -> None:
 
     with pytest.raises(LLMResponseError, match="expected 2"):
         await client.embed_documents(
-            [EmbeddingDocument(None, "a"), EmbeddingDocument(None, "b")]
+            [EmbeddingDocument("A", "a"), EmbeddingDocument("B", "b")]
         )
 
 

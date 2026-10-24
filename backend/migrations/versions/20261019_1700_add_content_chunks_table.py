@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("corpus", sa.String(length=30), nullable=False),
         sa.Column("scenario_id", sa.String(length=100), nullable=True),
         sa.Column("skill_key", sa.String(length=100), nullable=True),
-        sa.Column("title", sa.String(length=200), nullable=True),
+        sa.Column("title", sa.String(length=200), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("content_hash", sa.String(length=64), nullable=False),
         sa.Column("embedding_model", sa.String(length=100), nullable=False),
@@ -51,8 +51,11 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("content_hash"),
     )
-    op.create_index("ix_content_chunks_corpus", "content_chunks", ["corpus"])
-    op.create_index("ix_content_chunks_scenario_id", "content_chunks", ["scenario_id"])
+    op.create_index(
+        "ix_content_chunks_corpus_scenario_id",
+        "content_chunks",
+        ["corpus", "scenario_id"],
+    )
     op.create_index("ix_content_chunks_skill_key", "content_chunks", ["skill_key"])
     op.create_index(
         "ix_content_chunks_embedding",

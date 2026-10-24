@@ -21,6 +21,7 @@ class ContentChunk(Base):
     __tablename__ = "content_chunks"
     __table_args__ = (
         enum_check("corpus", "ck_content_chunks_corpus", Corpus),
+        Index("ix_content_chunks_corpus_scenario_id", "corpus", "scenario_id"),
         Index(
             "ix_content_chunks_embedding",
             "embedding",
@@ -33,10 +34,10 @@ class ContentChunk(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    corpus: Mapped[str] = mapped_column(String(30), index=True)
-    scenario_id: Mapped[str | None] = mapped_column(String(100), index=True)
+    corpus: Mapped[str] = mapped_column(String(30))
+    scenario_id: Mapped[str | None] = mapped_column(String(100))
     skill_key: Mapped[str | None] = mapped_column(String(100), index=True)
-    title: Mapped[str | None] = mapped_column(String(200))
+    title: Mapped[str] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text)
     content_hash: Mapped[str] = mapped_column(String(64), unique=True)
     embedding_model: Mapped[str] = mapped_column(String(100))

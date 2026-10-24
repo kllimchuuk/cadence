@@ -7,7 +7,7 @@ EMBEDDING_DIMENSIONS = 768
 
 @dataclass(frozen=True)
 class EmbeddingDocument:
-    title: str | None
+    title: str
     text: str
 
 

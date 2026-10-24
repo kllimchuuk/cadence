@@ -15,7 +15,7 @@ def _query_text(text: str) -> str:
 
 
 def _document_text(document: EmbeddingDocument) -> str:
-    return f"title: {document.title or 'none'} | text: {document.text}"
+    return f"title: {document.title} | text: {document.text}"
 
 
 class GeminiEmbeddingClient:
