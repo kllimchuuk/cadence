@@ -93,7 +93,10 @@ async def test_search_returns_the_closest_entry_of_the_corpus_first(
     await repository.upsert_many([_embedded(articles), _embedded(modals)])
 
     results = await repository.search(
-        Corpus.GRAMMAR_REFERENCE, fake_embedding("articles a an the"), limit=2
+        Corpus.GRAMMAR_REFERENCE,
+        fake_embedding("articles a an the"),
+        MODEL,
+        limit=2,
     )
 
     assert [chunk.skill_key for chunk in results] == ["articles", "modal_verbs"]
@@ -108,7 +111,10 @@ async def test_search_only_looks_inside_the_requested_corpus(
     await repository.upsert_many([_embedded(grammar), _embedded(scenario)])
 
     results = await repository.search(
-        Corpus.SCENARIO_CONTENT, fake_embedding("interview questions"), limit=5
+        Corpus.SCENARIO_CONTENT,
+        fake_embedding("interview questions"),
+        MODEL,
+        limit=5,
     )
 
     assert [chunk.scenario_id for chunk in results] == ["job_interview"]
@@ -129,6 +135,7 @@ async def test_search_is_restricted_to_the_scenario_and_honours_the_limit(
     results = await repository.search(
         Corpus.SCENARIO_CONTENT,
         fake_embedding("background"),
+        MODEL,
         limit=1,
         scenario_id="job_interview",
     )
@@ -154,3 +161,20 @@ async def test_get_grammar_rules_ignores_scenario_content_and_unknown_keys(
     assert [(rule.corpus, rule.skill_key) for rule in rules] == [
         (Corpus.GRAMMAR_REFERENCE, "articles")
     ]
+
+
+@pytest.mark.asyncio
+async def test_search_skips_entries_built_with_another_embedding_model(
+    repository: ContentChunkRepository,
+) -> None:
+    current = _grammar_entry("articles", "a an the")
+    stale = _grammar_entry("modal_verbs", "a an the")
+    await repository.upsert_many(
+        [_embedded(current), _embedded(stale, model="old-model")]
+    )
+
+    results = await repository.search(
+        Corpus.GRAMMAR_REFERENCE, fake_embedding("a an the"), MODEL, limit=5
+    )
+
+    assert [chunk.skill_key for chunk in results] == ["articles"]

@@ -18,6 +18,7 @@ class ContentRetrievalService:
         return await self._repository.search(
             Corpus.SCENARIO_CONTENT,
             await self._embedder.embed_query(query),
+            self._embedder.model,
             limit,
             scenario_id=scenario_id,
         )

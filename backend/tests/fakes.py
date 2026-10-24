@@ -135,7 +135,8 @@ def fake_embedding(text: str) -> list[float]:
 
 
 class FakeEmbeddingClient:
-    def __init__(self) -> None:
+    def __init__(self, model: str = "embedding-model") -> None:
+        self.model = model
         self.document_calls: list[tuple[EmbeddingDocument, ...]] = []
         self.queries: list[str] = []
 

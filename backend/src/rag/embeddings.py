@@ -12,6 +12,10 @@ class EmbeddingDocument:
 
 
 class EmbeddingClient(Protocol):
+    @property
+    def model(self) -> str:
+        raise NotImplementedError()
+
     async def embed_documents(
         self, documents: Sequence[EmbeddingDocument]
     ) -> list[list[float]]:

@@ -4,9 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rag.entries import ContentEntry, EmbeddedEntry
 from rag.models import Corpus
 from rag.repository import ContentChunkRepositoryImpl
-from rag.service import GrammarReferenceService
+from rag.service import ContentRetrievalService, GrammarReferenceService
 
-from tests.fakes import fake_embedding
+from tests.fakes import FakeEmbeddingClient, fake_embedding
 
 
 async def _store_rule(session: AsyncSession, skill_key: str) -> None:
@@ -40,3 +40,25 @@ async def test_get_rules_with_no_keys_returns_nothing(session: AsyncSession) -> 
     service = GrammarReferenceService(ContentChunkRepositoryImpl(session))
 
     assert await service.get_rules(set()) == []
+
+
+@pytest.mark.asyncio
+async def test_scenario_search_only_finds_entries_of_the_embedders_model(
+    session: AsyncSession,
+) -> None:
+    repository = ContentChunkRepositoryImpl(session)
+    entry = ContentEntry(
+        corpus=Corpus.SCENARIO_CONTENT,
+        scenario_id="job_interview",
+        title="Experience",
+        content="ask about experience",
+    )
+    await repository.upsert_many(
+        [EmbeddedEntry(entry, fake_embedding(entry.content), "old-model")]
+    )
+
+    found = await ContentRetrievalService(
+        repository, FakeEmbeddingClient("new-model")
+    ).search_scenario_content("job_interview", "experience", limit=5)
+
+    assert found == []

@@ -7,8 +7,6 @@ from rag.models import Corpus
 from rag.repository import ContentChunkRepository, ContentChunkRepositoryImpl
 from tests.fakes import FakeEmbeddingClient
 
-MODEL = "embedding-model"
-
 
 @pytest.fixture
 def repository(session: AsyncSession) -> ContentChunkRepository:
@@ -21,11 +19,9 @@ def embedder() -> FakeEmbeddingClient:
 
 
 def _service(
-    repository: ContentChunkRepository,
-    embedder: FakeEmbeddingClient,
-    model: str = MODEL,
+    repository: ContentChunkRepository, embedder: FakeEmbeddingClient
 ) -> ContentIngestionService:
-    return ContentIngestionService(repository, embedder, model)
+    return ContentIngestionService(repository, embedder)
 
 
 def _grammar(skill_key: str, content: str = "A rule.") -> ContentEntry:
@@ -89,9 +85,11 @@ async def test_entries_built_with_another_model_are_re_embedded(
     repository: ContentChunkRepository, embedder: FakeEmbeddingClient
 ) -> None:
     entries = [_grammar("articles")]
-    await _service(repository, embedder, "old-model").ingest(entries)
+    await _service(repository, FakeEmbeddingClient("old-model")).ingest(entries)
 
-    report = await _service(repository, embedder, "new-model").ingest(entries)
+    report = await _service(repository, FakeEmbeddingClient("new-model")).ingest(
+        entries
+    )
 
     assert (report.embedded, report.unchanged, report.removed) == (1, 0, 0)
     assert await repository.get_embedding_models() == {

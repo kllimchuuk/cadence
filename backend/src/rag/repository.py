@@ -34,6 +34,7 @@ class ContentChunkRepository(ABC):
         self,
         corpus: Corpus,
         query_embedding: list[float],
+        embedding_model: str,
         limit: int,
         scenario_id: str | None = None,
     ) -> list[ContentChunk]:
@@ -103,13 +104,17 @@ class ContentChunkRepositoryImpl(ContentChunkRepository):
         self,
         corpus: Corpus,
         query_embedding: list[float],
+        embedding_model: str,
         limit: int,
         scenario_id: str | None = None,
     ) -> list[ContentChunk]:
         await self._session.execute(
             text("SET LOCAL hnsw.iterative_scan = strict_order")
         )
-        query = select(ContentChunk).where(ContentChunk.corpus == corpus)
+        query = select(ContentChunk).where(
+            ContentChunk.corpus == corpus,
+            ContentChunk.embedding_model == embedding_model,
+        )
         if scenario_id is not None:
             query = query.where(ContentChunk.scenario_id == scenario_id)
         result = await self._session.execute(

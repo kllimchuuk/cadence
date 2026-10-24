@@ -18,11 +18,9 @@ class ContentIngestionService:
         self,
         repository: ContentChunkRepository,
         embedder: EmbeddingClient,
-        embedding_model: str,
     ) -> None:
         self._repository = repository
         self._embedder = embedder
-        self._embedding_model = embedding_model
 
     async def ingest(self, entries: Sequence[ContentEntry]) -> IngestionReport:
         by_hash = {entry.content_hash: entry for entry in entries}
@@ -30,7 +28,7 @@ class ContentIngestionService:
         pending = [
             entry
             for content_hash, entry in by_hash.items()
-            if stored_models.get(content_hash) != self._embedding_model
+            if stored_models.get(content_hash) != self._embedder.model
         ]
 
         vectors = await self._embedder.embed_documents(
@@ -38,7 +36,7 @@ class ContentIngestionService:
         )
         await self._repository.upsert_many(
             [
-                EmbeddedEntry(entry, vector, self._embedding_model)
+                EmbeddedEntry(entry, vector, self._embedder.model)
                 for entry, vector in zip(pending, vectors, strict=True)
             ]
         )

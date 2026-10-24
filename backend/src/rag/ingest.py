@@ -18,7 +18,6 @@ async def main() -> None:
             service = ContentIngestionService(
                 ContentChunkRepositoryImpl(session),
                 llm_factory.create_embedding_client(settings.GEMINI_EMBEDDING_MODEL),
-                settings.GEMINI_EMBEDDING_MODEL,
             )
             report = await service.ingest(load_corpus())
             await session.commit()

@@ -26,6 +26,10 @@ class GeminiEmbeddingClient:
         self._model = model
         self._timeout_seconds = timeout_seconds
 
+    @property
+    def model(self) -> str:
+        return self._model
+
     async def embed_documents(
         self, documents: Sequence[EmbeddingDocument]
     ) -> list[list[float]]:
