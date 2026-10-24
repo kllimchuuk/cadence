@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from orchestration.context import ConversationRuntimeContext
 from orchestration.graph import build_conversation_graph
+from orchestration.nodes import briefing
 from orchestration.nodes.briefing import SCENARIO_CONTENT_LIMIT
 from orchestration.nodes.conversing import END_SESSION_REQUEST
 from orchestration.state import initial_conversation_state
@@ -19,7 +20,13 @@ from rag.models import Corpus
 from rag.repository import ContentChunkRepositoryImpl
 from users.repository import UserRepositoryImpl
 
-from tests.fakes import FakeEmbeddingClient, FakeLLMClient, fake_embedding
+from tests.fakes import (
+    FakeEmbeddingClient,
+    FakeLLMClient,
+    HangingEmbeddingClient,
+    UnavailableEmbeddingClient,
+    fake_embedding,
+)
 from tests.helpers import run_graph_to_completion
 
 MODEL = "embedding-model"
@@ -135,3 +142,35 @@ async def test_briefing_embeds_the_query_once_per_session_not_per_turn(
     await _run_briefing(session, session_factory, user_id, embedder)
 
     assert len(embedder.queries) == 1
+
+
+@pytest.mark.asyncio
+async def test_briefing_starts_without_reference_when_embedding_is_unavailable(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+) -> None:
+    await _store(session, "job_interview", "Experience", "ask about experience")
+
+    result = await _run_briefing(
+        session, session_factory, user_id, UnavailableEmbeddingClient()
+    )
+
+    assert "<reference>" not in result["system_prompt"]
+    assert result["transcript"][0] == {"role": "assistant", "content": "Hi!"}
+
+
+@pytest.mark.asyncio
+async def test_briefing_gives_up_on_a_slow_embedding_instead_of_hanging(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(briefing, "SCENARIO_CONTENT_TIMEOUT_SECONDS", 0.05)
+
+    result = await _run_briefing(
+        session, session_factory, user_id, HangingEmbeddingClient()
+    )
+
+    assert "<reference>" not in result["system_prompt"]

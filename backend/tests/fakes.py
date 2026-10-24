@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import math
 import re
@@ -14,7 +15,7 @@ from analysis.schemas import (
     TaskCompletion,
 )
 from llm.client import ChatMessage
-from llm.exceptions import LLMResponseError
+from llm.exceptions import LLMResponseError, LLMUnavailableError
 from rag.embeddings import EMBEDDING_DIMENSIONS, EmbeddingDocument
 
 
@@ -147,3 +148,14 @@ class FakeEmbeddingClient:
     async def embed_query(self, text: str) -> list[float]:
         self.queries.append(text)
         return fake_embedding(text)
+
+
+class UnavailableEmbeddingClient(FakeEmbeddingClient):
+    async def embed_query(self, text: str) -> list[float]:
+        raise LLMUnavailableError("429 RESOURCE_EXHAUSTED")
+
+
+class HangingEmbeddingClient(FakeEmbeddingClient):
+    async def embed_query(self, text: str) -> list[float]:
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
