@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import TypeVar
 
 import yaml
 from pydantic import BaseModel, ConfigDict, TypeAdapter
@@ -9,6 +10,8 @@ from rag.entries import ContentEntry
 from rag.exceptions import CorpusFileError
 from rag.models import Corpus
 from scenarios.config import get_scenario
+
+ParsedT = TypeVar("ParsedT")
 
 CONTENT_DIR = BACKEND_DIR / "content"
 SCENARIO_CONTENT_FILE = "scenario_content.yaml"
@@ -30,7 +33,7 @@ _SCENARIO_FILE = TypeAdapter(dict[str, list[_Entry]])
 _GRAMMAR_FILE = TypeAdapter(list[_GrammarEntry])
 
 
-def _read(path: Path, adapter: TypeAdapter):
+def _read(path: Path, adapter: TypeAdapter[ParsedT]) -> ParsedT:
     try:
         return adapter.validate_python(yaml.safe_load(path.read_text()))
     except (OSError, yaml.YAMLError, PydanticValidationError) as error:

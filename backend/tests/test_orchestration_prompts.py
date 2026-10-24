@@ -24,7 +24,7 @@ def _persona_memory(facts: list[str]) -> PersonaMemory:
 def test_the_prompt_names_the_scenarios_role_and_persona_and_goals() -> None:
     scenario = get_scenario("job_interview")
 
-    prompt = build_persona_system_prompt(scenario, persona_memory=None)
+    prompt = build_persona_system_prompt(scenario, None, [])
 
     assert scenario.persona in prompt
     assert scenario.role in prompt
@@ -36,7 +36,7 @@ def test_the_prompt_includes_remembered_facts_when_present() -> None:
     scenario = get_scenario("job_interview")
     memory = _persona_memory(["User is preparing for a backend interview."])
 
-    prompt = build_persona_system_prompt(scenario, memory)
+    prompt = build_persona_system_prompt(scenario, memory, [])
 
     assert "User is preparing for a backend interview." in prompt
 
@@ -44,7 +44,7 @@ def test_the_prompt_includes_remembered_facts_when_present() -> None:
 def test_the_prompt_omits_the_memory_section_when_there_is_none() -> None:
     scenario = get_scenario("job_interview")
 
-    prompt = build_persona_system_prompt(scenario, persona_memory=None)
+    prompt = build_persona_system_prompt(scenario, None, [])
 
     assert "remember" not in prompt.lower()
 
@@ -53,7 +53,7 @@ def test_the_prompt_omits_the_memory_section_when_facts_are_empty() -> None:
     scenario = get_scenario("job_interview")
     memory = _persona_memory([])
 
-    prompt = build_persona_system_prompt(scenario, memory)
+    prompt = build_persona_system_prompt(scenario, memory, [])
 
     assert "remember" not in prompt.lower()
 

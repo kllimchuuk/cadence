@@ -28,7 +28,7 @@ def build_scenario_content_query(
 def build_persona_system_prompt(
     scenario: Scenario,
     persona_memory: PersonaMemory | None,
-    reference_content: Sequence[ContentChunk] = (),
+    reference_content: Sequence[ContentChunk],
 ) -> str:
     lines = [
         f"You are role-playing as {scenario.persona}",
