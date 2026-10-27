@@ -100,6 +100,7 @@ async def test_search_returns_the_closest_entry_of_the_corpus_first(
     )
 
     assert [chunk.skill_key for chunk in results] == ["articles", "modal_verbs"]
+    assert results[0].distance < results[1].distance
 
 
 @pytest.mark.asyncio
@@ -117,7 +118,7 @@ async def test_search_only_looks_inside_the_requested_corpus(
         limit=5,
     )
 
-    assert [chunk.scenario_id for chunk in results] == ["job_interview"]
+    assert [chunk.title for chunk in results] == ["Experience"]
 
 
 @pytest.mark.asyncio
@@ -141,7 +142,7 @@ async def test_search_is_restricted_to_the_scenario_and_honours_the_limit(
     )
 
     assert len(results) == 1
-    assert results[0].scenario_id == "job_interview"
+    assert results[0].title in {"Experience", "Weakness"}
 
 
 @pytest.mark.asyncio

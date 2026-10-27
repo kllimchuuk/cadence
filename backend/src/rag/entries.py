@@ -26,6 +26,14 @@ class ContentEntry:
 
 
 @dataclass(frozen=True)
+class RetrievedChunk:
+    title: str
+    content: str
+    skill_key: str | None
+    distance: float
+
+
+@dataclass(frozen=True)
 class EmbeddedEntry:
     entry: ContentEntry
     embedding: list[float]

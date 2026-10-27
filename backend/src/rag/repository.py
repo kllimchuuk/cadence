@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from rag.entries import EmbeddedEntry
+from rag.entries import EmbeddedEntry, RetrievedChunk
 from rag.models import ContentChunk, Corpus
 
 
@@ -37,7 +37,7 @@ class ContentChunkRepository(ABC):
         embedding_model: str,
         limit: int,
         scenario_id: str | None = None,
-    ) -> list[ContentChunk]:
+    ) -> list[RetrievedChunk]:
         raise NotImplementedError()
 
 
@@ -107,19 +107,21 @@ class ContentChunkRepositoryImpl(ContentChunkRepository):
         embedding_model: str,
         limit: int,
         scenario_id: str | None = None,
-    ) -> list[ContentChunk]:
+    ) -> list[RetrievedChunk]:
         await self._session.execute(
             text("SET LOCAL hnsw.iterative_scan = strict_order")
         )
-        query = select(ContentChunk).where(
+        distance = ContentChunk.embedding.cosine_distance(query_embedding)
+        query = select(
+            ContentChunk.title,
+            ContentChunk.content,
+            ContentChunk.skill_key,
+            distance.label("distance"),
+        ).where(
             ContentChunk.corpus == corpus,
             ContentChunk.embedding_model == embedding_model,
         )
         if scenario_id is not None:
             query = query.where(ContentChunk.scenario_id == scenario_id)
-        result = await self._session.execute(
-            query.order_by(
-                ContentChunk.embedding.cosine_distance(query_embedding)
-            ).limit(limit)
-        )
-        return list(result.scalars())
+        result = await self._session.execute(query.order_by(distance).limit(limit))
+        return [RetrievedChunk(*row) for row in result.all()]

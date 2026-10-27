@@ -1,6 +1,7 @@
 from collections.abc import Collection
 
 from llm.embeddings import EmbeddingClient
+from rag.entries import RetrievedChunk
 from rag.models import ContentChunk, Corpus
 from rag.repository import ContentChunkRepository
 
@@ -14,7 +15,7 @@ class ContentRetrievalService:
 
     async def search_scenario_content(
         self, scenario_id: str, query: str, limit: int
-    ) -> list[ContentChunk]:
+    ) -> list[RetrievedChunk]:
         return await self._repository.search(
             Corpus.SCENARIO_CONTENT,
             await self._embedder.embed_query(query),

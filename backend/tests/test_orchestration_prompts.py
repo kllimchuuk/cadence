@@ -7,6 +7,7 @@ from orchestration.prompts import (
     build_scenario_content_query,
 )
 from persona.models import PersonaMemory
+from rag.entries import RetrievedChunk
 from rag.models import ContentChunk
 from scenarios.config import get_scenario
 from weaknesses.models import WeaknessRecord, WeaknessState
@@ -58,8 +59,8 @@ def test_the_prompt_omits_the_memory_section_when_facts_are_empty() -> None:
     assert "remember" not in prompt.lower()
 
 
-def _chunk(title: str, content: str) -> ContentChunk:
-    return ContentChunk(title=title, content=content)
+def _chunk(title: str, content: str) -> RetrievedChunk:
+    return RetrievedChunk(title=title, content=content, skill_key=None, distance=0.0)
 
 
 def test_the_prompt_lists_reference_content_inside_a_delimited_block() -> None:
