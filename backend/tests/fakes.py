@@ -16,7 +16,7 @@ from analysis.schemas import (
 )
 from llm.client import ChatMessage
 from llm.exceptions import LLMResponseError, LLMUnavailableError
-from rag.embeddings import EMBEDDING_DIMENSIONS, EmbeddingDocument
+from llm.embeddings import EMBEDDING_DIMENSIONS, EmbeddingDocument
 
 
 def reply_deltas(reply: str) -> list[str]:

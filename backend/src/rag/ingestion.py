@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from rag.embeddings import EmbeddingClient, EmbeddingDocument
+from llm.embeddings import EmbeddingClient, EmbeddingDocument
 from rag.entries import ContentEntry, EmbeddedEntry
 from rag.repository import ContentChunkRepository
 

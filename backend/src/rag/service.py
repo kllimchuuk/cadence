@@ -1,6 +1,6 @@
 from collections.abc import Collection
 
-from rag.embeddings import EmbeddingClient
+from llm.embeddings import EmbeddingClient
 from rag.models import ContentChunk, Corpus
 from rag.repository import ContentChunkRepository
 
