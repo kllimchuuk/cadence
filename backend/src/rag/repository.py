@@ -12,6 +12,10 @@ from rag.models import ContentChunk, Corpus
 
 class ContentChunkRepository(ABC):
     @abstractmethod
+    async def count(self) -> int:
+        raise NotImplementedError()
+
+    @abstractmethod
     async def get_embedding_models(self) -> dict[str, str]:
         raise NotImplementedError()
 
@@ -44,6 +48,10 @@ class ContentChunkRepository(ABC):
 class ContentChunkRepositoryImpl(ContentChunkRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def count(self) -> int:
+        result = await self._session.execute(select(func.count(ContentChunk.id)))
+        return result.scalar_one()
 
     async def get_embedding_models(self) -> dict[str, str]:
         result = await self._session.execute(

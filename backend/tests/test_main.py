@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from config import Settings
 from core.exceptions import AppException
+import main
 from main import create_app
 from tests.helpers import settings_kwargs
 
@@ -101,3 +102,16 @@ def test_a_missing_required_field_fails_fast(
     }
     with pytest.raises(ValidationError):
         Settings(_env_file=None, **kwargs)
+
+
+def test_startup_warns_when_the_content_corpus_is_empty(
+    settings: Settings,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main.logger, "disabled", False)
+    with caplog.at_level("WARNING", logger="main"):
+        with TestClient(create_app(settings)):
+            pass
+
+    assert "content corpus is empty" in caplog.text

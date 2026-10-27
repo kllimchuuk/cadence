@@ -31,3 +31,11 @@ class GrammarReferenceService:
 
     async def get_rules(self, skill_keys: Collection[str]) -> list[ContentChunk]:
         return await self._repository.get_grammar_rules(skill_keys)
+
+
+class ContentCorpusService:
+    def __init__(self, repository: ContentChunkRepository) -> None:
+        self._repository = repository
+
+    async def is_empty(self) -> bool:
+        return await self._repository.count() == 0

@@ -179,3 +179,14 @@ async def test_search_skips_entries_built_with_another_embedding_model(
     )
 
     assert [chunk.skill_key for chunk in results] == ["articles"]
+
+
+@pytest.mark.asyncio
+async def test_count_reflects_the_stored_chunks(
+    repository: ContentChunkRepository,
+) -> None:
+    assert await repository.count() == 0
+
+    await repository.upsert_many([_embedded(_grammar_entry("articles", "a an the"))])
+
+    assert await repository.count() == 1
