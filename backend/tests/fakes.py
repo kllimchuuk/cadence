@@ -1,3 +1,6 @@
+import asyncio
+import hashlib
+import math
 import re
 import sys
 from collections.abc import AsyncIterator, Sequence
@@ -5,13 +8,15 @@ from dataclasses import dataclass
 
 from analysis.schemas import (
     FluencyAssessment,
+    GrammarTriage,
     PersonaFact,
     SessionAnalysisResult,
     SkillObservation,
     TaskCompletion,
 )
 from llm.client import ChatMessage
-from llm.exceptions import LLMResponseError
+from llm.exceptions import LLMResponseError, LLMUnavailableError
+from rag.embeddings import EMBEDDING_DIMENSIONS, EmbeddingDocument
 
 
 def reply_deltas(reply: str) -> list[str]:
@@ -44,9 +49,11 @@ class FakeLLMClient:
         self,
         reply: str = "Tell me more.",
         analysis: SessionAnalysisResult | None = None,
+        triaged_skill_keys: list[str] | None = None,
     ) -> None:
         self._reply = reply
         self._analysis = analysis or analysis_result()
+        self._triage = GrammarTriage(skill_keys=triaged_skill_keys or [])
         self.requests: list[LLMRequest] = []
 
     async def stream(
@@ -61,8 +68,10 @@ class FakeLLMClient:
         system_instruction: str,
         messages: Sequence[ChatMessage],
         schema: type,
-    ) -> SessionAnalysisResult:
+    ) -> SessionAnalysisResult | GrammarTriage:
         self.requests.append(LLMRequest(system_instruction, tuple(messages)))
+        if schema is GrammarTriage:
+            return self._triage
         return self._analysis
 
 
@@ -111,3 +120,43 @@ class FakeLLMClientFactory:
 
     def create(self, _model: str) -> FakeLLMClient:
         return self._client
+
+    def create_embedding_client(self, _model: str) -> "FakeEmbeddingClient":
+        return FakeEmbeddingClient()
+
+
+def fake_embedding(text: str) -> list[float]:
+    vector = [0.0] * EMBEDDING_DIMENSIONS
+    for word in re.findall(r"[a-z']+", text.lower()):
+        digest = hashlib.sha256(word.encode()).digest()
+        vector[int.from_bytes(digest[:4]) % EMBEDDING_DIMENSIONS] += 1.0
+    norm = math.sqrt(sum(value * value for value in vector)) or 1.0
+    return [value / norm for value in vector]
+
+
+class FakeEmbeddingClient:
+    def __init__(self, model: str = "embedding-model") -> None:
+        self.model = model
+        self.document_calls: list[tuple[EmbeddingDocument, ...]] = []
+        self.queries: list[str] = []
+
+    async def embed_documents(
+        self, documents: Sequence[EmbeddingDocument]
+    ) -> list[list[float]]:
+        self.document_calls.append(tuple(documents))
+        return [fake_embedding(f"{item.title or ''} {item.text}") for item in documents]
+
+    async def embed_query(self, text: str) -> list[float]:
+        self.queries.append(text)
+        return fake_embedding(text)
+
+
+class UnavailableEmbeddingClient(FakeEmbeddingClient):
+    async def embed_query(self, text: str) -> list[float]:
+        raise LLMUnavailableError("429 RESOURCE_EXHAUSTED")
+
+
+class HangingEmbeddingClient(FakeEmbeddingClient):
+    async def embed_query(self, text: str) -> list[float]:
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
