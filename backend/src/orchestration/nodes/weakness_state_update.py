@@ -3,9 +3,9 @@ from langgraph.runtime import Runtime
 from orchestration.context import AnalysisRuntimeContext
 from orchestration.state import AnalysisState
 from practice.repository import LearningSessionRepositoryImpl
-from weaknesses.models import WeaknessCategory
 from weaknesses.repository import WeaknessRecordRepositoryImpl
 from weaknesses.service import WeaknessService
+from weaknesses.skill_keys import category_of
 
 
 async def weakness_state_update_node(
@@ -21,14 +21,14 @@ async def weakness_state_update_node(
             if observation["outcome"] == "error":
                 await weakness_service.record_error(
                     state["user_id"],
-                    WeaknessCategory.GRAMMAR,
+                    category_of(observation["skill_key"]),
                     observation["skill_key"],
                     state["session_id"],
                 )
             else:
                 await weakness_service.record_clean_use(
                     state["user_id"],
-                    WeaknessCategory.GRAMMAR,
+                    category_of(observation["skill_key"]),
                     observation["skill_key"],
                     state["session_id"],
                 )

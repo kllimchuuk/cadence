@@ -8,7 +8,7 @@ from practice.repository import LearningSessionRepository, get_practice_reposito
 from weaknesses.exceptions import InvalidSkillKeyError
 from weaknesses.models import WeaknessCategory, WeaknessRecord, WeaknessState
 from weaknesses.repository import WeaknessRecordRepository, get_weakness_repository
-from weaknesses.skill_keys import GrammarSkillKey
+from weaknesses.skill_keys import SKILL_VOCABULARY
 
 _CLEAN_STREAK_TO_ADVANCE = 3
 
@@ -37,7 +37,7 @@ class WeaknessService:
         skill_key: str,
         session_id: uuid.UUID,
     ) -> WeaknessRecord:
-        self._require_valid_skill_key(skill_key)
+        self._require_valid_skill_key(category, skill_key)
         await self._require_own_session(session_id, user_id)
 
         record = await self._get_or_create(user_id, category, skill_key)
@@ -52,7 +52,7 @@ class WeaknessService:
         skill_key: str,
         session_id: uuid.UUID,
     ) -> WeaknessRecord | None:
-        self._require_valid_skill_key(skill_key)
+        self._require_valid_skill_key(category, skill_key)
         await self._require_own_session(session_id, user_id)
 
         record = await self._repository.get_by_user_and_skill(
@@ -83,11 +83,9 @@ class WeaknessService:
             raise LearningSessionNotFoundError()
 
     @staticmethod
-    def _require_valid_skill_key(skill_key: str) -> None:
-        try:
-            GrammarSkillKey(skill_key)
-        except ValueError as error:
-            raise InvalidSkillKeyError() from error
+    def _require_valid_skill_key(category: WeaknessCategory, skill_key: str) -> None:
+        if skill_key not in SKILL_VOCABULARY.get(category, frozenset()):
+            raise InvalidSkillKeyError()
 
     @staticmethod
     def _advance(state: WeaknessState, streak: int) -> tuple[WeaknessState, int]:
