@@ -2,6 +2,9 @@ import re
 from collections.abc import Sequence
 
 from analysis.schemas import SessionAnalysisResult
+from llm.client import MessageRole
+
+MIN_QUOTE_WORDS = 2
 
 _NON_WORD = re.compile(r"[\W_]+")
 
@@ -14,13 +17,15 @@ def learner_turns(transcript: Sequence[dict[str, str]]) -> list[str]:
     return [
         f" {_normalize(turn['content'])} "
         for turn in transcript
-        if turn["role"] == "user"
+        if turn["role"] == MessageRole.USER
     ]
 
 
 def _is_quoted(evidence: str, turns: Sequence[str]) -> bool:
     quote = _normalize(evidence)
-    return bool(quote) and any(f" {quote} " in turn for turn in turns)
+    if len(quote.split()) < MIN_QUOTE_WORDS:
+        return False
+    return any(f" {quote} " in turn for turn in turns)
 
 
 def find_unquoted_evidence(

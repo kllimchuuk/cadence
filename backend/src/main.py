@@ -25,12 +25,14 @@ logger = logging.getLogger(__name__)
 
 
 async def warn_if_corpus_is_empty(app: FastAPI) -> None:
+    embedding_model = app.state.settings.GEMINI_EMBEDDING_MODEL
     async with app.state.session_factory() as session:
         corpus = ContentCorpusService(ContentChunkRepositoryImpl(session))
-        if await corpus.is_empty():
+        if await corpus.is_empty_for(embedding_model):
             logger.warning(
-                "The content corpus is empty, so scenario grounding and the "
-                "grammar reference are off; run the ingestion command"
+                "The content corpus has nothing embedded with %s, so scenario "
+                "grounding is off; run the ingestion command",
+                embedding_model,
             )
 
 

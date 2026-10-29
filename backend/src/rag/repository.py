@@ -12,7 +12,7 @@ from rag.models import ContentChunk, Corpus
 
 class ContentChunkRepository(ABC):
     @abstractmethod
-    async def count(self) -> int:
+    async def count_for_model(self, embedding_model: str) -> int:
         raise NotImplementedError()
 
     @abstractmethod
@@ -49,8 +49,12 @@ class ContentChunkRepositoryImpl(ContentChunkRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def count(self) -> int:
-        result = await self._session.execute(select(func.count(ContentChunk.id)))
+    async def count_for_model(self, embedding_model: str) -> int:
+        result = await self._session.execute(
+            select(func.count(ContentChunk.id)).where(
+                ContentChunk.embedding_model == embedding_model
+            )
+        )
         return result.scalar_one()
 
     async def get_embedding_models(self) -> dict[str, str]:
@@ -132,4 +136,4 @@ class ContentChunkRepositoryImpl(ContentChunkRepository):
         if scenario_id is not None:
             query = query.where(ContentChunk.scenario_id == scenario_id)
         result = await self._session.execute(query.order_by(distance).limit(limit))
-        return [RetrievedChunk(*row) for row in result.all()]
+        return [RetrievedChunk(**row._mapping) for row in result.all()]

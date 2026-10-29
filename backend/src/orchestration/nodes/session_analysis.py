@@ -71,16 +71,20 @@ async def _generate_quoted_analysis(
     runtime: Runtime[AnalysisRuntimeContext],
     system_instruction: str,
     messages: Sequence[ChatMessage],
-    transcript: list[dict[str, str]],
+    state: AnalysisState,
 ) -> SessionAnalysisResult:
     llm = runtime.context.session_analysis_llm
-    turns = learner_turns(transcript)
+    turns = learner_turns(state["transcript"])
     result = await llm.generate_structured(
         system_instruction, messages, SessionAnalysisResult
     )
     unquoted = find_unquoted_evidence(result, turns)
     if unquoted:
-        logger.warning("Analysis quoted words the learner never said: %s", unquoted)
+        logger.warning(
+            "Session %s analysis quoted words the learner never said: %s",
+            state["session_id"],
+            unquoted,
+        )
         result = await llm.generate_structured(
             system_instruction,
             [
@@ -93,7 +97,9 @@ async def _generate_quoted_analysis(
         unquoted = find_unquoted_evidence(result, turns)
         if unquoted:
             logger.warning(
-                "Dropping analysis items with invented evidence: %s", unquoted
+                "Session %s: dropping analysis items with invented evidence: %s",
+                state["session_id"],
+                unquoted,
             )
     return keep_quoted(result, turns)
 
@@ -130,7 +136,7 @@ async def session_analysis_node(
             scenario, grammar_reference, active_weaknesses
         ),
         messages,
-        state["transcript"],
+        state,
     )
     await _save_analysis(runtime, state, result)
 

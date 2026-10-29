@@ -74,3 +74,17 @@ def test_facts_are_checked_and_unquoted_items_are_dropped() -> None:
     filtered = keep_quoted(result, turns)
     assert [o.evidence for o in filtered.skill_observations] == ["Yesterday I go"]
     assert filtered.new_facts == [kept]
+
+
+def test_a_single_word_is_too_short_to_be_evidence() -> None:
+    turns = learner_turns(TRANSCRIPT)
+    result = analysis_result(skill_observations=[_observation("I")])
+
+    assert find_unquoted_evidence(result, turns) == ["I"]
+
+
+def test_two_words_are_enough_to_be_evidence() -> None:
+    turns = learner_turns(TRANSCRIPT)
+    result = analysis_result(skill_observations=[_observation("I go")])
+
+    assert find_unquoted_evidence(result, turns) == []

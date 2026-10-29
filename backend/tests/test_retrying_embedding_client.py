@@ -4,7 +4,7 @@ import pytest
 
 from llm.embeddings import EmbeddingDocument
 from llm.exceptions import LLMResponseError, LLMUnavailableError
-from rag.retrying_embedder import RetryingEmbeddingClient
+from llm.retrying_embedding_client import RetryingEmbeddingClient
 from tests.fakes import FakeEmbeddingClient
 
 

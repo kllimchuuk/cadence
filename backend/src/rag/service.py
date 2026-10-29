@@ -37,5 +37,5 @@ class ContentCorpusService:
     def __init__(self, repository: ContentChunkRepository) -> None:
         self._repository = repository
 
-    async def is_empty(self) -> bool:
-        return await self._repository.count() == 0
+    async def is_empty_for(self, embedding_model: str) -> bool:
+        return await self._repository.count_for_model(embedding_model) == 0

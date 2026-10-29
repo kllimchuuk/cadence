@@ -182,11 +182,17 @@ async def test_search_skips_entries_built_with_another_embedding_model(
 
 
 @pytest.mark.asyncio
-async def test_count_reflects_the_stored_chunks(
+async def test_count_for_model_only_counts_chunks_of_that_model(
     repository: ContentChunkRepository,
 ) -> None:
-    assert await repository.count() == 0
+    assert await repository.count_for_model(MODEL) == 0
 
-    await repository.upsert_many([_embedded(_grammar_entry("articles", "a an the"))])
+    await repository.upsert_many(
+        [
+            _embedded(_grammar_entry("articles", "a an the")),
+            _embedded(_grammar_entry("modal_verbs", "can"), model="old-model"),
+        ]
+    )
 
-    assert await repository.count() == 1
+    assert await repository.count_for_model(MODEL) == 1
+    assert await repository.count_for_model("old-model") == 1

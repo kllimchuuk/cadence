@@ -3,10 +3,10 @@ import asyncio
 from config import settings
 from core.database import build_engine, build_session_factory
 from llm.factory import LLMClientFactory
+from llm.retrying_embedding_client import RetryingEmbeddingClient
 from rag.corpus import load_corpus
 from rag.ingestion import ContentIngestionService
 from rag.repository import ContentChunkRepositoryImpl
-from rag.retrying_embedder import RetryingEmbeddingClient
 
 EMBEDDING_MAX_ATTEMPTS = 5
 EMBEDDING_BASE_DELAY_SECONDS = 2.0
