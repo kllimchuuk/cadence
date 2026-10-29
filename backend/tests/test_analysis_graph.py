@@ -32,11 +32,17 @@ from users.repository import UserRepositoryImpl
 from weaknesses.models import WeaknessCategory, WeaknessState
 from weaknesses.repository import WeaknessRecordRepositoryImpl
 
-from tests.fakes import FakeLLMClient, analysis_result, fake_embedding
+from tests.fakes import (
+    FakeLLMClient,
+    SequencedAnalysisLLMClient,
+    analysis_result,
+    fake_embedding,
+)
 
 TRANSCRIPT = [
     {"role": "assistant", "content": "Hi, thanks for joining!"},
     {"role": "user", "content": "Yesterday I go to the office."},
+    {"role": "user", "content": "I have a backend interview next week."},
     {"role": "assistant", "content": "Thanks for practising today."},
 ]
 PAST_SIMPLE_ERROR = SkillObservation(
@@ -44,6 +50,18 @@ PAST_SIMPLE_ERROR = SkillObservation(
     outcome="error",
     evidence="Yesterday I go to the office.",
     note="Used present tense for a past event.",
+)
+
+
+BACKEND_INTERVIEW_FACT = PersonaFact(
+    fact="User is preparing for a backend interview.",
+    evidence="I have a backend interview next week.",
+)
+INVENTED_ERROR = SkillObservation(
+    skill_key="irregular_past_forms",
+    outcome="clean",
+    evidence="Yesterday I went to the office.",
+    note="Used the past tense correctly.",
 )
 
 
@@ -203,11 +221,7 @@ async def test_persona_memory_update_writes_real_facts(
         session_id,
         user_id,
         session_factory,
-        FakeLLMClient(
-            analysis=analysis_result(
-                new_facts=["User is preparing for a backend interview."]
-            )
-        ),
+        FakeLLMClient(analysis=analysis_result(new_facts=[BACKEND_INTERVIEW_FACT])),
     )
 
     persona_service = PersonaService(PersonaMemoryRepositoryImpl(session))
@@ -229,7 +243,7 @@ async def test_session_analysis_forwards_its_findings_to_downstream_nodes(
         FakeLLMClient(
             analysis=analysis_result(
                 skill_observations=[PAST_SIMPLE_ERROR],
-                new_facts=["User is preparing for a backend interview."],
+                new_facts=[BACKEND_INTERVIEW_FACT],
             )
         ),
     )
@@ -379,3 +393,77 @@ async def test_session_analysis_lists_the_active_weaknesses_in_both_prompts(
 
     for request in llm.requests:
         assert "articles (active)" in request.system_instruction
+
+
+@pytest.mark.asyncio
+async def test_invented_evidence_is_sent_back_and_the_corrected_analysis_is_kept(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    llm = SequencedAnalysisLLMClient(
+        [
+            analysis_result(skill_observations=[INVENTED_ERROR]),
+            analysis_result(skill_observations=[PAST_SIMPLE_ERROR]),
+        ]
+    )
+
+    result = await _analyse(session_id, user_id, session_factory, llm)
+
+    correction = llm.requests[-1].messages[-1]
+    assert "Yesterday I went to the office." in correction.content
+    assert len(llm.requests[-1].messages) == 3
+    assert result["skill_observations"] == [PAST_SIMPLE_ERROR.model_dump()]
+    record = await WeaknessRecordRepositoryImpl(session).get_by_user_and_skill(
+        user_id, WeaknessCategory.GRAMMAR, "irregular_past_forms"
+    )
+    assert record is not None
+    assert record.state == WeaknessState.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_evidence_still_invented_after_the_retry_is_dropped(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    invented_fact = PersonaFact(
+        fact="User lives in Berlin.", evidence="I live in Berlin."
+    )
+    llm = SequencedAnalysisLLMClient(
+        [
+            analysis_result(
+                skill_observations=[INVENTED_ERROR], new_facts=[invented_fact]
+            ),
+            analysis_result(
+                skill_observations=[INVENTED_ERROR],
+                new_facts=[invented_fact, BACKEND_INTERVIEW_FACT],
+            ),
+        ]
+    )
+
+    result = await _analyse(session_id, user_id, session_factory, llm)
+
+    assert result["skill_observations"] == []
+    assert result["persona_facts"] == [BACKEND_INTERVIEW_FACT.fact]
+    record = await WeaknessRecordRepositoryImpl(session).get_by_user_and_skill(
+        user_id, WeaknessCategory.GRAMMAR, "irregular_past_forms"
+    )
+    assert record is None
+
+
+@pytest.mark.asyncio
+async def test_verified_evidence_costs_no_second_analysis_call(
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    llm = FakeLLMClient(
+        analysis=analysis_result(skill_observations=[PAST_SIMPLE_ERROR])
+    )
+
+    await _analyse(session_id, user_id, session_factory, llm)
+
+    assert len(llm.requests) == 2

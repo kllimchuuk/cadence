@@ -31,7 +31,7 @@ class LLMRequest:
 
 def analysis_result(
     skill_observations: list[SkillObservation] | None = None,
-    new_facts: list[str] | None = None,
+    new_facts: list[PersonaFact] | None = None,
 ) -> SessionAnalysisResult:
     return SessionAnalysisResult(
         grammar_findings=[],
@@ -40,7 +40,7 @@ def analysis_result(
         task_completion=TaskCompletion(goals=[]),
         focus_points=["Practice past-tense verbs"],
         skill_observations=skill_observations or [],
-        new_facts=[PersonaFact(fact=fact, evidence=fact) for fact in new_facts or []],
+        new_facts=new_facts or [],
     )
 
 
@@ -73,6 +73,25 @@ class FakeLLMClient:
         if schema is GrammarTriage:
             return self._triage
         return self._analysis
+
+
+class SequencedAnalysisLLMClient(FakeLLMClient):
+    def __init__(self, analyses: list[SessionAnalysisResult]) -> None:
+        super().__init__()
+        self._analyses = iter(analyses)
+
+    async def generate_structured(
+        self,
+        system_instruction: str,
+        messages: Sequence[ChatMessage],
+        schema: type,
+    ) -> SessionAnalysisResult | GrammarTriage:
+        if schema is GrammarTriage:
+            return await super().generate_structured(
+                system_instruction, messages, schema
+            )
+        self.requests.append(LLMRequest(system_instruction, tuple(messages)))
+        return next(self._analyses)
 
 
 class FlakyLLMClient(FakeLLMClient):

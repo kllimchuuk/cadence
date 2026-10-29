@@ -78,6 +78,16 @@ def build_grammar_triage_instruction(
     return "\n".join(lines)
 
 
+def build_evidence_correction(unquoted_evidence: Sequence[str]) -> str:
+    quotes = "; ".join(f'"{quote}"' for quote in unquoted_evidence)
+    return (
+        "These evidence quotes are not words the learner said in the "
+        f"transcript: {quotes}. Return the full analysis again. Quote the "
+        "learner's exact words for every observation and fact, or leave the "
+        "ones you cannot quote out."
+    )
+
+
 def build_analysis_system_instruction(
     scenario: Scenario,
     grammar_reference: Sequence[ContentChunk],
