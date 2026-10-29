@@ -2,6 +2,7 @@ from collections.abc import Sequence
 
 from llm.client import ChatMessage, MessageRole
 from persona.models import PersonaMemory
+from rag.entries import RetrievedChunk
 from rag.models import ContentChunk
 from scenarios.config import Scenario
 from weaknesses.models import WeaknessRecord
@@ -28,7 +29,7 @@ def build_scenario_content_query(
 def build_persona_system_prompt(
     scenario: Scenario,
     persona_memory: PersonaMemory | None,
-    reference_content: Sequence[ContentChunk],
+    reference_content: Sequence[RetrievedChunk],
 ) -> str:
     lines = [
         f"You are role-playing as {scenario.persona}",
@@ -75,6 +76,16 @@ def build_grammar_triage_instruction(
             + ". Include each one the learner's turns touch."
         )
     return "\n".join(lines)
+
+
+def build_evidence_correction(unquoted_evidence: Sequence[str]) -> str:
+    quotes = "; ".join(f'"{quote}"' for quote in unquoted_evidence)
+    return (
+        "These evidence quotes are not words the learner said in the "
+        f"transcript: {quotes}. Return the full analysis again. Quote the "
+        "learner's exact words for every observation and fact, or leave the "
+        "ones you cannot quote out."
+    )
 
 
 def build_analysis_system_instruction(

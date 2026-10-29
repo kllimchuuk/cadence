@@ -3,7 +3,7 @@ from google import genai
 from llm.client import LLMClient
 from llm.gemini_client import GeminiClient
 from llm.gemini_embedding_client import GeminiEmbeddingClient
-from rag.embeddings import EmbeddingClient
+from llm.embeddings import EmbeddingClient
 
 
 class LLMClientFactory:

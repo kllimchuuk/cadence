@@ -110,6 +110,16 @@ async def test_recording_an_error_with_an_unknown_skill_key_is_rejected(
 
 
 @pytest.mark.asyncio
+async def test_a_grammar_skill_key_under_another_category_is_rejected(
+    service: WeaknessService, user_id: uuid.UUID, session_id: uuid.UUID
+) -> None:
+    with pytest.raises(InvalidSkillKeyError):
+        await service.record_error(
+            user_id, WeaknessCategory.VOCABULARY, "articles", session_id
+        )
+
+
+@pytest.mark.asyncio
 async def test_recording_a_clean_use_with_an_unknown_skill_key_is_rejected(
     service: WeaknessService, user_id: uuid.UUID, session_id: uuid.UUID
 ) -> None:

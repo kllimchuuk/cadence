@@ -17,9 +17,23 @@ from core.exceptions import AppException
 from llm.factory import LLMClientFactory
 from orchestration.checkpointer import prepare_checkpointer
 from orchestration.graph import build_analysis_graph, build_conversation_graph
+from rag.repository import ContentChunkRepositoryImpl
+from rag.service import ContentCorpusService
 from realtime.router import router as realtime_router
 
 logger = logging.getLogger(__name__)
+
+
+async def warn_if_corpus_is_empty(app: FastAPI) -> None:
+    embedding_model = app.state.settings.GEMINI_EMBEDDING_MODEL
+    async with app.state.session_factory() as session:
+        corpus = ContentCorpusService(ContentChunkRepositoryImpl(session))
+        if await corpus.is_empty_for(embedding_model):
+            logger.warning(
+                "The content corpus has nothing embedded with %s, so scenario "
+                "grounding is off; run the ingestion command",
+                embedding_model,
+            )
 
 
 @asynccontextmanager
@@ -37,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 checkpointer=checkpointer
             )
             app.state.analysis_graph = build_analysis_graph()
+            await warn_if_corpus_is_empty(app)
             yield
     finally:
         await app.state.db_engine.dispose()

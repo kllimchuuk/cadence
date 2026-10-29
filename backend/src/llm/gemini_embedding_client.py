@@ -5,7 +5,7 @@ from google.genai import types
 
 from llm.exceptions import LLMResponseError
 from llm.gemini_call import call_gemini
-from rag.embeddings import EMBEDDING_DIMENSIONS, EmbeddingDocument
+from llm.embeddings import EMBEDDING_DIMENSIONS, EmbeddingDocument
 
 MAX_DOCUMENTS_PER_REQUEST = 100
 

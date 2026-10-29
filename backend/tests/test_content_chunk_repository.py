@@ -100,6 +100,7 @@ async def test_search_returns_the_closest_entry_of_the_corpus_first(
     )
 
     assert [chunk.skill_key for chunk in results] == ["articles", "modal_verbs"]
+    assert results[0].distance < results[1].distance
 
 
 @pytest.mark.asyncio
@@ -117,7 +118,7 @@ async def test_search_only_looks_inside_the_requested_corpus(
         limit=5,
     )
 
-    assert [chunk.scenario_id for chunk in results] == ["job_interview"]
+    assert [chunk.title for chunk in results] == ["Experience"]
 
 
 @pytest.mark.asyncio
@@ -141,7 +142,7 @@ async def test_search_is_restricted_to_the_scenario_and_honours_the_limit(
     )
 
     assert len(results) == 1
-    assert results[0].scenario_id == "job_interview"
+    assert results[0].title in {"Experience", "Weakness"}
 
 
 @pytest.mark.asyncio
@@ -178,3 +179,20 @@ async def test_search_skips_entries_built_with_another_embedding_model(
     )
 
     assert [chunk.skill_key for chunk in results] == ["articles"]
+
+
+@pytest.mark.asyncio
+async def test_count_for_model_only_counts_chunks_of_that_model(
+    repository: ContentChunkRepository,
+) -> None:
+    assert await repository.count_for_model(MODEL) == 0
+
+    await repository.upsert_many(
+        [
+            _embedded(_grammar_entry("articles", "a an the")),
+            _embedded(_grammar_entry("modal_verbs", "can"), model="old-model"),
+        ]
+    )
+
+    assert await repository.count_for_model(MODEL) == 1
+    assert await repository.count_for_model("old-model") == 1

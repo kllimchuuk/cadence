@@ -8,7 +8,7 @@ from llm.gemini_embedding_client import (
     MAX_DOCUMENTS_PER_REQUEST,
     GeminiEmbeddingClient,
 )
-from rag.embeddings import EMBEDDING_DIMENSIONS, EmbeddingDocument
+from llm.embeddings import EMBEDDING_DIMENSIONS, EmbeddingDocument
 
 TIMEOUT_SECONDS = 1
 SHORT_TIMEOUT_SECONDS = 0.01

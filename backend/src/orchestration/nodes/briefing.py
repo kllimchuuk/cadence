@@ -15,7 +15,7 @@ from orchestration.streaming import stream_reply
 from persona.models import PersonaMemory
 from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
-from rag.models import ContentChunk
+from rag.entries import RetrievedChunk
 from rag.repository import ContentChunkRepositoryImpl
 from rag.service import ContentRetrievalService
 from scenarios.config import Scenario, get_scenario
@@ -39,7 +39,7 @@ async def _retrieve_reference_content(
     runtime: Runtime[ConversationRuntimeContext],
     scenario: Scenario,
     persona_memory: PersonaMemory | None,
-) -> list[ContentChunk]:
+) -> list[RetrievedChunk]:
     try:
         async with asyncio.timeout(SCENARIO_CONTENT_TIMEOUT_SECONDS):
             async with runtime.context.session_factory() as session:
