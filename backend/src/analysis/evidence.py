@@ -31,11 +31,15 @@ def _is_quoted(evidence: str, turns: Sequence[str]) -> bool:
 def find_unquoted_evidence(
     result: SessionAnalysisResult, turns: Sequence[str]
 ) -> list[str]:
-    evidence = [
-        *(observation.evidence for observation in result.skill_observations),
-        *(fact.evidence for fact in result.new_facts),
+    observation_quotes = [
+        observation.evidence for observation in result.skill_observations
     ]
-    return [quote for quote in evidence if not _is_quoted(quote, turns)]
+    fact_quotes = [fact.evidence for fact in result.new_facts]
+    return [
+        quote
+        for quote in observation_quotes + fact_quotes
+        if not _is_quoted(quote, turns)
+    ]
 
 
 def keep_quoted(

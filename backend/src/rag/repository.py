@@ -136,4 +136,12 @@ class ContentChunkRepositoryImpl(ContentChunkRepository):
         if scenario_id is not None:
             query = query.where(ContentChunk.scenario_id == scenario_id)
         result = await self._session.execute(query.order_by(distance).limit(limit))
-        return [RetrievedChunk(**row._mapping) for row in result.all()]
+        return [
+            RetrievedChunk(
+                title=row.title,
+                content=row.content,
+                skill_key=row.skill_key,
+                distance=row.distance,
+            )
+            for row in result.all()
+        ]
