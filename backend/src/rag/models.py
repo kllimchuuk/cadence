@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from core.base_model import Base
 from core.sql import enum_check
-from rag.embeddings import EMBEDDING_DIMENSIONS
+from llm.embeddings import EMBEDDING_DIMENSIONS
 
 
 class Corpus(StrEnum):

@@ -3,13 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from rag.corpus import (
-    GRAMMAR_REFERENCE_FILE,
-    SCENARIO_CONTENT_FILE,
-    load_corpus,
-)
+from core.content_file import CorpusFileError
+from grammar.reference import GRAMMAR_REFERENCE_FILE
 from orchestration.nodes.briefing import SCENARIO_CONTENT_LIMIT
-from rag.exceptions import CorpusFileError
+from rag.corpus import SCENARIO_CONTENT_FILE, load_corpus
 from rag.models import Corpus
 from scenarios.exceptions import UnknownScenarioError
 

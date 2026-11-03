@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from llm.client import LLMClient
-from rag.embeddings import EmbeddingClient
+from llm.embeddings import EmbeddingClient
 
 
 @dataclass

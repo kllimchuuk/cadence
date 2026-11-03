@@ -1,16 +1,19 @@
 import json
+import logging
 import uuid
 from collections.abc import Collection, Sequence
 
 from langgraph.runtime import Runtime
 
+from analysis.evidence import find_unquoted_evidence, keep_quoted, learner_turns
 from analysis.repository import SessionAnalysisRepositoryImpl
 from analysis.schemas import GrammarTriage, SessionAnalysisResult
 from analysis.service import AnalysisService
-from llm.client import ChatMessage, MessageRole
+from llm.client import ChatMessage, LLMClient, MessageRole
 from orchestration.context import AnalysisRuntimeContext
 from orchestration.prompts import (
     build_analysis_system_instruction,
+    build_evidence_correction,
     build_grammar_triage_instruction,
 )
 from orchestration.state import AnalysisState
@@ -22,6 +25,8 @@ from scenarios.config import get_scenario
 from weaknesses.models import WeaknessRecord
 from weaknesses.repository import WeaknessRecordRepositoryImpl
 from weaknesses.service import WeaknessService
+
+logger = logging.getLogger(__name__)
 
 
 def _transcript_messages(transcript: list[dict[str, str]]) -> list[ChatMessage]:
@@ -62,6 +67,61 @@ async def _retrieve_grammar_reference(
     return await _load_grammar_rules(runtime, skill_keys)
 
 
+async def _regenerate_with_quotes(
+    llm: LLMClient,
+    system_instruction: str,
+    messages: Sequence[ChatMessage],
+    rejected: SessionAnalysisResult,
+    unquoted: Sequence[str],
+) -> SessionAnalysisResult:
+    return await llm.generate_structured(
+        system_instruction,
+        [
+            *messages,
+            ChatMessage(MessageRole.ASSISTANT, rejected.model_dump_json()),
+            ChatMessage(MessageRole.USER, build_evidence_correction(unquoted)),
+        ],
+        SessionAnalysisResult,
+    )
+
+
+def _drop_unquoted(
+    result: SessionAnalysisResult, turns: Sequence[str], session_id: uuid.UUID
+) -> SessionAnalysisResult:
+    unquoted = find_unquoted_evidence(result, turns)
+    if unquoted:
+        logger.warning(
+            "Session %s: dropping analysis items with invented evidence: %s",
+            session_id,
+            unquoted,
+        )
+    return keep_quoted(result, turns)
+
+
+async def _generate_quoted_analysis(
+    runtime: Runtime[AnalysisRuntimeContext],
+    system_instruction: str,
+    messages: Sequence[ChatMessage],
+    state: AnalysisState,
+) -> SessionAnalysisResult:
+    llm = runtime.context.session_analysis_llm
+    turns = learner_turns(state["transcript"])
+    result = await llm.generate_structured(
+        system_instruction, messages, SessionAnalysisResult
+    )
+    unquoted = find_unquoted_evidence(result, turns)
+    if unquoted:
+        logger.warning(
+            "Session %s analysis quoted words the learner never said: %s",
+            state["session_id"],
+            unquoted,
+        )
+        result = await _regenerate_with_quotes(
+            llm, system_instruction, messages, result, unquoted
+        )
+    return _drop_unquoted(result, turns, state["session_id"])
+
+
 async def _save_analysis(
     runtime: Runtime[AnalysisRuntimeContext],
     state: AnalysisState,
@@ -88,12 +148,13 @@ async def session_analysis_node(
         runtime, messages, active_weaknesses
     )
 
-    result = await runtime.context.session_analysis_llm.generate_structured(
+    result = await _generate_quoted_analysis(
+        runtime,
         build_analysis_system_instruction(
             scenario, grammar_reference, active_weaknesses
         ),
         messages,
-        SessionAnalysisResult,
+        state,
     )
     await _save_analysis(runtime, state, result)
 

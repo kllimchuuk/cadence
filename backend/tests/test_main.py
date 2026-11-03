@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+import main
 from config import Settings
 from core.exceptions import AppException
 from main import create_app
@@ -101,3 +102,16 @@ def test_a_missing_required_field_fails_fast(
     }
     with pytest.raises(ValidationError):
         Settings(_env_file=None, **kwargs)
+
+
+def test_startup_warns_when_nothing_is_embedded_with_the_current_model(
+    settings: Settings,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main.logger, "disabled", False)
+    with caplog.at_level("WARNING", logger="main"):
+        with TestClient(create_app(settings)):
+            pass
+
+    assert "nothing embedded with test-gemini-embedding-model" in caplog.text
