@@ -83,8 +83,8 @@ def build_evidence_correction(unquoted_evidence: Sequence[str]) -> str:
     return (
         "These evidence quotes are not words the learner said in the "
         f"transcript: {quotes}. Return the full analysis again. Quote the "
-        "learner's exact words for every observation and fact, or leave the "
-        "ones you cannot quote out."
+        "learner's exact words for every finding, achieved goal, focus point, "
+        "observation and fact, or leave the ones you cannot quote out."
     )
 
 
@@ -97,11 +97,11 @@ def build_analysis_system_instruction(
     lines = [
         f"{TRANSCRIPT_BRIEF} Assess grammar, vocabulary, fluency and task "
         f"completion. Score task completion against this checklist: {goals}.",
-        "Report 1-3 focus points, one observation per tracked grammar skill "
+        "Report up to 3 focus points, one observation per tracked grammar skill "
         "(error or clean use), and any new facts about the user worth "
-        "remembering for next time. Back every finding, observation and fact "
-        "with the learner's exact words from the transcript as evidence; leave "
-        "out anything you cannot quote.",
+        "remembering for next time. Back every finding, achieved goal, focus "
+        "point, observation and fact with the learner's exact words from the "
+        "transcript as evidence; leave out anything you cannot quote.",
     ]
     if grammar_reference:
         lines.append(

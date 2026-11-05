@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from analysis.repository import SessionAnalysisRepositoryImpl
 from analysis.schemas import (
     FluencyAssessment,
+    FocusPoint,
     GoalOutcome,
     LanguageFinding,
     PersonaFact,
@@ -41,6 +42,7 @@ from tests.fakes import (
 
 TRANSCRIPT = [
     {"role": "assistant", "content": "Hi, thanks for joining!"},
+    {"role": "user", "content": "Hi, nice to meet you."},
     {"role": "user", "content": "Yesterday I go to the office."},
     {"role": "user", "content": "I have a backend interview next week."},
     {"role": "assistant", "content": "Thanks for practising today."},
@@ -130,7 +132,12 @@ async def test_session_analysis_writes_a_real_analysis_row(
                         )
                     ]
                 ),
-                focus_points=["Practice past-tense verbs"],
+                focus_points=[
+                    FocusPoint(
+                        text="Practice past-tense verbs",
+                        evidence="Yesterday I go to the office.",
+                    )
+                ],
                 skill_observations=[
                     SkillObservation(
                         skill_key="irregular_past_forms",
@@ -154,7 +161,12 @@ async def test_session_analysis_writes_a_real_analysis_row(
     )
     stored = await analysis_service.get_analysis(session_id, user_id)
     assert stored is not None
-    assert stored.focus_points == ["Practice past-tense verbs"]
+    assert stored.focus_points == [
+        {
+            "text": "Practice past-tense verbs",
+            "evidence": "Yesterday I go to the office.",
+        }
+    ]
     assert stored.grammar_findings == [
         {
             "evidence": "Yesterday I go to the office.",

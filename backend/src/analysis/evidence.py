@@ -1,12 +1,20 @@
 import re
 from collections.abc import Sequence
+from typing import Protocol, TypeVar
 
-from analysis.schemas import SessionAnalysisResult
+from analysis.schemas import SessionAnalysisResult, TaskCompletion
 from llm.client import MessageRole
 
 MIN_QUOTE_WORDS = 2
 
 _NON_WORD = re.compile(r"[\W_]+")
+
+
+class _Quoted(Protocol):
+    evidence: str
+
+
+_QuotedT = TypeVar("_QuotedT", bound=_Quoted)
 
 
 def _normalize(text: str) -> str:
@@ -31,29 +39,36 @@ def _is_quoted(evidence: str, turns: Sequence[str]) -> bool:
 def find_unquoted_evidence(
     result: SessionAnalysisResult, turns: Sequence[str]
 ) -> list[str]:
-    observation_quotes = [
-        observation.evidence for observation in result.skill_observations
+    quotes = [
+        *(observation.evidence for observation in result.skill_observations),
+        *(fact.evidence for fact in result.new_facts),
+        *(finding.evidence for finding in result.grammar_findings),
+        *(finding.evidence for finding in result.vocabulary_findings),
+        *(goal.evidence for goal in result.task_completion.goals if goal.achieved),
+        *(point.evidence for point in result.focus_points),
     ]
-    fact_quotes = [fact.evidence for fact in result.new_facts]
-    return [
-        quote
-        for quote in observation_quotes + fact_quotes
-        if not _is_quoted(quote, turns)
-    ]
+    return [quote for quote in quotes if not _is_quoted(quote, turns)]
+
+
+def _quoted(items: Sequence[_QuotedT], turns: Sequence[str]) -> list[_QuotedT]:
+    return [item for item in items if _is_quoted(item.evidence, turns)]
 
 
 def keep_quoted(
     result: SessionAnalysisResult, turns: Sequence[str]
 ) -> SessionAnalysisResult:
+    goals = [
+        goal
+        for goal in result.task_completion.goals
+        if not goal.achieved or _is_quoted(goal.evidence, turns)
+    ]
     return result.model_copy(
         update={
-            "skill_observations": [
-                observation
-                for observation in result.skill_observations
-                if _is_quoted(observation.evidence, turns)
-            ],
-            "new_facts": [
-                fact for fact in result.new_facts if _is_quoted(fact.evidence, turns)
-            ],
+            "skill_observations": _quoted(result.skill_observations, turns),
+            "new_facts": _quoted(result.new_facts, turns),
+            "grammar_findings": _quoted(result.grammar_findings, turns),
+            "vocabulary_findings": _quoted(result.vocabulary_findings, turns),
+            "task_completion": TaskCompletion(goals=goals),
+            "focus_points": _quoted(result.focus_points, turns),
         }
     )
