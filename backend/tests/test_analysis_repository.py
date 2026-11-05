@@ -63,7 +63,12 @@ async def test_an_analysis_is_created_and_read_back_by_session_id(
 
     assert found is not None
     assert found.fluency_findings == {"summary": "Steady, with a few pauses."}
-    assert found.focus_points == ["Practice past-tense verbs"]
+    assert found.focus_points == [
+        {
+            "text": "Practice past-tense verbs",
+            "evidence": "Yesterday I go to the office.",
+        }
+    ]
 
 
 @pytest.mark.asyncio

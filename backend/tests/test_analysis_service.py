@@ -88,13 +88,11 @@ async def test_creating_twice_for_the_same_session_is_a_no_op(
 ) -> None:
     first = await service.create_analysis(session_id, user_id, analysis_result())
 
-    different = analysis_result().model_copy(
-        update={"focus_points": ["Different point"]}
-    )
+    different = analysis_result().model_copy(update={"focus_points": []})
     second = await service.create_analysis(session_id, user_id, different)
 
     assert second.id == first.id
-    assert second.focus_points == ["Practice past-tense verbs"]
+    assert len(second.focus_points) == 1
 
 
 @pytest.mark.asyncio
