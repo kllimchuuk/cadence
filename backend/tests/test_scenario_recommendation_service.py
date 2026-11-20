@@ -81,7 +81,10 @@ async def _store_analysis(
 async def test_nothing_is_recommended_without_active_weaknesses(
     service: ScenarioRecommendationService, user_id: uuid.UUID
 ) -> None:
-    assert await service.recommend(user_id) is None
+    recommendation = await service.recommend(user_id)
+
+    assert recommendation.scenario is None
+    assert recommendation.reasons == []
 
 
 @pytest.mark.asyncio
@@ -93,7 +96,7 @@ async def test_the_reason_quotes_what_the_learner_really_said(
 
     recommendation = await service.recommend(user_id)
 
-    assert recommendation is not None
+    assert recommendation.scenario is not None
     assert SKILL_KEY in recommendation.scenario.trains_skills
     (reason,) = recommendation.reasons
     assert reason.skill_key == SKILL_KEY
@@ -121,7 +124,6 @@ async def test_the_newest_error_quote_is_the_one_reported(
 
     recommendation = await service.recommend(user_id)
 
-    assert recommendation is not None
     assert recommendation.reasons[0].evidence == "Fresh mistake here."
 
 
@@ -134,7 +136,6 @@ async def test_a_clean_use_is_never_reported_as_the_evidence_of_an_error(
 
     recommendation = await service.recommend(user_id)
 
-    assert recommendation is not None
     assert recommendation.reasons[0].evidence is None
 
 
@@ -148,4 +149,7 @@ async def test_another_users_weaknesses_are_not_used(
     await _track_weakness(session, other_user_id)
     await _store_analysis(session, other_user_id, "Where you live now?")
 
-    assert await service.recommend(user_id) is None
+    recommendation = await service.recommend(user_id)
+
+    assert recommendation.scenario is None
+    assert recommendation.reasons == []

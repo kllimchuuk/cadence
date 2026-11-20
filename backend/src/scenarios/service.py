@@ -7,7 +7,7 @@ from fastapi import Depends
 from analysis.models import SessionAnalysis
 from analysis.repository import SessionAnalysisRepository, get_analysis_repository
 from practice.repository import LearningSessionRepository, get_practice_repository
-from scenarios.config import Scenario
+from scenarios.config import Scenario, list_scenarios
 from scenarios.recommendation import recommend_scenario
 from weaknesses.repository import WeaknessRecordRepository, get_weakness_repository
 
@@ -21,7 +21,7 @@ class RecommendationReason:
 
 @dataclass(frozen=True)
 class ScenarioRecommendation:
-    scenario: Scenario
+    scenario: Scenario | None
     reasons: list[RecommendationReason]
 
 
@@ -38,6 +38,15 @@ def _latest_error_evidence(
     return None
 
 
+class ScenarioCatalogService:
+    def list_scenarios(self) -> tuple[Scenario, ...]:
+        return list_scenarios()
+
+
+def get_scenario_catalog_service() -> ScenarioCatalogService:
+    return ScenarioCatalogService()
+
+
 class ScenarioRecommendationService:
     def __init__(
         self,
@@ -49,13 +58,13 @@ class ScenarioRecommendationService:
         self._sessions = session_repository
         self._analyses = analysis_repository
 
-    async def recommend(self, user_id: uuid.UUID) -> ScenarioRecommendation | None:
+    async def recommend(self, user_id: uuid.UUID) -> ScenarioRecommendation:
         weaknesses = await self._weaknesses.get_active_for_user(user_id)
         last_completed = await self._sessions.get_last_completed_at_by_scenario(user_id)
 
         match = recommend_scenario(weaknesses, last_completed)
         if match is None:
-            return None
+            return ScenarioRecommendation(scenario=None, reasons=[])
 
         analyses = await self._analyses.list_by_user(user_id)
         return ScenarioRecommendation(

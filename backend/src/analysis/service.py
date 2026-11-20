@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends
@@ -7,7 +8,14 @@ from analysis.models import SessionAnalysis
 from analysis.repository import SessionAnalysisRepository, get_analysis_repository
 from analysis.schemas import SessionAnalysisResult
 from practice.exceptions import LearningSessionNotFoundError
+from practice.models import LearningSession
 from practice.repository import LearningSessionRepository, get_practice_repository
+
+
+@dataclass(frozen=True)
+class SessionWithAnalysis:
+    session: LearningSession
+    analysis: SessionAnalysis | None
 
 
 class AnalysisService:
@@ -37,6 +45,15 @@ class AnalysisService:
         self, session_id: uuid.UUID, user_id: uuid.UUID
     ) -> SessionAnalysis | None:
         return await self._repository.get_by_session_id(session_id, user_id)
+
+    async def get_session_with_analysis(
+        self, session_id: uuid.UUID, user_id: uuid.UUID
+    ) -> SessionWithAnalysis:
+        learning_session = await self._sessions.get_by_id(session_id, user_id)
+        if learning_session is None:
+            raise LearningSessionNotFoundError()
+        analysis = await self._repository.get_by_session_id(session_id, user_id)
+        return SessionWithAnalysis(learning_session, analysis)
 
     async def list_analyses(self, user_id: uuid.UUID) -> list[SessionAnalysis]:
         return await self._repository.list_by_user(user_id)
