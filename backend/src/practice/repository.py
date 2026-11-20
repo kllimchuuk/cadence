@@ -23,7 +23,15 @@ class LearningSessionRepository(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def get_by_user(self, user_id: uuid.UUID) -> list[LearningSession]:
+    async def get_by_user(
+        self, user_id: uuid.UUID, limit: int, offset: int
+    ) -> list[LearningSession]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_last_completed_at_by_scenario(
+        self, user_id: uuid.UUID
+    ) -> dict[str, datetime]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -71,11 +79,30 @@ class LearningSessionRepositoryImpl(LearningSessionRepository):
         )
         return result.scalar_one_or_none()
 
-    async def get_by_user(self, user_id: uuid.UUID) -> list[LearningSession]:
+    async def get_by_user(
+        self, user_id: uuid.UUID, limit: int, offset: int
+    ) -> list[LearningSession]:
         result = await self._session.execute(
-            select(LearningSession).where(LearningSession.user_id == user_id)
+            select(LearningSession)
+            .where(LearningSession.user_id == user_id)
+            .order_by(LearningSession.started_at.desc(), LearningSession.id)
+            .limit(limit)
+            .offset(offset)
         )
         return list(result.scalars().all())
+
+    async def get_last_completed_at_by_scenario(
+        self, user_id: uuid.UUID
+    ) -> dict[str, datetime]:
+        result = await self._session.execute(
+            select(LearningSession.scenario_id, func.max(LearningSession.ended_at))
+            .where(
+                LearningSession.user_id == user_id,
+                LearningSession.status == SessionStatus.COMPLETED,
+            )
+            .group_by(LearningSession.scenario_id)
+        )
+        return dict(result.all())
 
     async def count_in_progress_started_after(
         self, user_id: uuid.UUID, started_after: datetime

@@ -90,7 +90,7 @@ async def test_listing_sessions_only_returns_the_users_own(
     await service.start_session(user_id, "job_interview")
     await service.start_session(other_user_id, "client_call")
 
-    found = await service.list_sessions(user_id)
+    found = await service.list_sessions(user_id, limit=10, offset=0)
 
     assert {record.scenario_id for record in found} == {"job_interview"}
 

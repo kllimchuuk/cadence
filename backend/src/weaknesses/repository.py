@@ -28,6 +28,10 @@ class WeaknessRecordRepository(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    async def get_all_for_user(self, user_id: uuid.UUID) -> list[WeaknessRecord]:
+        raise NotImplementedError()
+
+    @abstractmethod
     async def update_state(
         self,
         record: WeaknessRecord,
@@ -71,6 +75,14 @@ class WeaknessRecordRepositoryImpl(WeaknessRecordRepository):
                     [WeaknessState.ACTIVE, WeaknessState.PROBATION]
                 ),
             )
+        )
+        return list(result.scalars().all())
+
+    async def get_all_for_user(self, user_id: uuid.UUID) -> list[WeaknessRecord]:
+        result = await self._session.execute(
+            select(WeaknessRecord)
+            .where(WeaknessRecord.user_id == user_id)
+            .order_by(WeaknessRecord.updated_at.desc(), WeaknessRecord.id)
         )
         return list(result.scalars().all())
 

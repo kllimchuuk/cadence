@@ -84,12 +84,36 @@ async def test_sessions_are_read_back_by_user(
     await repository.create(other_user_id, "client_call")
     await session.commit()
 
-    found = await repository.get_by_user(user_id)
+    found = await repository.get_by_user(user_id, limit=10, offset=0)
 
     assert {record.scenario_id for record in found} == {
         "job_interview",
         "daily_standup",
     }
+
+
+@pytest.mark.asyncio
+async def test_sessions_come_back_newest_first_and_are_paged(
+    session: AsyncSession,
+    repository: LearningSessionRepository,
+    user_id: uuid.UUID,
+) -> None:
+    started_at = datetime(2026, 11, 1, tzinfo=UTC)
+    for day, scenario_id in enumerate(
+        ("job_interview", "daily_standup", "client_call")
+    ):
+        record = await repository.create(user_id, scenario_id)
+        record.started_at = started_at + timedelta(days=day)
+    await session.flush()
+
+    first_page = await repository.get_by_user(user_id, limit=2, offset=0)
+    second_page = await repository.get_by_user(user_id, limit=2, offset=2)
+
+    assert [record.scenario_id for record in first_page] == [
+        "client_call",
+        "daily_standup",
+    ]
+    assert [record.scenario_id for record in second_page] == ["job_interview"]
 
 
 @pytest.mark.asyncio
@@ -153,3 +177,27 @@ async def test_only_the_users_recent_in_progress_sessions_are_counted(
 
     assert await repository.count_in_progress_started_after(user_id, an_hour_ago) == 1
     assert await repository.count_in_progress_started_after(user_id, in_an_hour) == 0
+
+
+@pytest.mark.asyncio
+async def test_the_last_completed_time_is_reported_per_scenario_for_the_user(
+    session: AsyncSession,
+    repository: LearningSessionRepository,
+    user_id: uuid.UUID,
+    other_user_id: uuid.UUID,
+) -> None:
+    older = datetime(2026, 11, 1, tzinfo=UTC)
+    newer = datetime(2026, 11, 8, tzinfo=UTC)
+    for ended_at in (older, newer):
+        record = await repository.create(user_id, "job_interview")
+        await repository.finish(record, SessionStatus.COMPLETED, [], None)
+        record.ended_at = ended_at
+    abandoned = await repository.create(user_id, "daily_standup")
+    await repository.finish(abandoned, SessionStatus.INCOMPLETE, [], None)
+    other_record = await repository.create(other_user_id, "client_call")
+    await repository.finish(other_record, SessionStatus.COMPLETED, [], None)
+    await session.flush()
+
+    found = await repository.get_last_completed_at_by_scenario(user_id)
+
+    assert found == {"job_interview": newer}

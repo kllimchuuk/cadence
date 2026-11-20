@@ -25,6 +25,7 @@ from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
+from progress.repository import SessionProgressRepositoryImpl
 from rag.entries import ContentEntry, EmbeddedEntry
 from rag.models import Corpus
 from rag.repository import ContentChunkRepositoryImpl
@@ -479,3 +480,19 @@ async def test_verified_evidence_costs_no_second_analysis_call(
     await _analyse(session_id, user_id, session_factory, llm)
 
     assert len(llm.requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_progress_update_writes_a_progress_row_for_the_session(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    await _analyse(session_id, user_id, session_factory, FakeLLMClient())
+
+    progress = await SessionProgressRepositoryImpl(session).get_by_session_id(
+        session_id, user_id
+    )
+    assert progress is not None
+    assert progress.goals_total == len(get_scenario("job_interview").goal_checklist)

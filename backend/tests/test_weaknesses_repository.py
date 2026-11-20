@@ -120,6 +120,33 @@ async def test_only_active_and_probation_weaknesses_are_returned(
 
 
 @pytest.mark.asyncio
+async def test_all_weaknesses_include_mastered_ones_but_only_the_users_own(
+    session: AsyncSession,
+    repository: WeaknessRecordRepository,
+    user_id: uuid.UUID,
+    other_user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    mastered_record = await repository.create(
+        user_id, WeaknessCategory.GRAMMAR, "articles"
+    )
+    await repository.update_state(
+        mastered_record, WeaknessState.MASTERED, 0, session_id
+    )
+    await repository.create(user_id, WeaknessCategory.GRAMMAR, "irregular_past_forms")
+    await repository.create(other_user_id, WeaknessCategory.GRAMMAR, "articles")
+    await session.commit()
+
+    found = await repository.get_all_for_user(user_id)
+
+    assert {record.skill_key for record in found} == {
+        "articles",
+        "irregular_past_forms",
+    }
+    assert {record.user_id for record in found} == {user_id}
+
+
+@pytest.mark.asyncio
 async def test_updating_state_persists_streak_and_last_session(
     session: AsyncSession,
     repository: WeaknessRecordRepository,

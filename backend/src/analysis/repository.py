@@ -65,7 +65,9 @@ class SessionAnalysisRepositoryImpl(SessionAnalysisRepository):
 
     async def list_by_user(self, user_id: uuid.UUID) -> list[SessionAnalysis]:
         result = await self._session.execute(
-            select(SessionAnalysis).where(SessionAnalysis.user_id == user_id)
+            select(SessionAnalysis)
+            .where(SessionAnalysis.user_id == user_id)
+            .order_by(SessionAnalysis.created_at.desc(), SessionAnalysis.id)
         )
         return list(result.scalars().all())
 
