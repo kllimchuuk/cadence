@@ -349,6 +349,40 @@ def test_ordinary_commits_pass(
     assert run_main(hook, monkeypatch, command) == 0
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit -m x 2>/dev/null --amend",
+        "git commit -m x > out backend/a.py",
+        "git commit -m x >/dev/null backend/src/a.py",
+        "git add a.py > out .",
+        "git add a.py 2>&1 -A",
+    ],
+)
+def test_arguments_after_a_redirection_are_still_checked(
+    hook: ModuleType, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    assert run_main(hook, monkeypatch, command) == 2
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit -m x 2>&1 | tail -20",
+        "git commit -m x 2>/dev/null",
+        "git commit -m x &> out",
+        "git commit -q -m x >> log.txt",
+        "git commit -F - <<'EOF'\nfix: x\nEOF",
+    ],
+)
+def test_redirections_are_not_read_as_paths(
+    hook: ModuleType, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    monkeypatch.setattr(hook, "run_checks", lambda: None)
+
+    assert run_main(hook, monkeypatch, command) == 0
+
+
 def test_invalid_event_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     hook = load_hook()
     monkeypatch.setattr(sys, "stdin", io.StringIO("not json"))

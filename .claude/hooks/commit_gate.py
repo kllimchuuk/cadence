@@ -12,7 +12,8 @@ BACKEND = REPOSITORY / "backend"
 CHECKED_PATHS = ("backend", ".claude/hooks")
 TAIL_LINES = 40
 
-SEPARATORS = {"&&", "||", ";", ";;", "|", "|&", "&", "(", ")", ">", ">>", "<"}
+SEPARATORS = {"&&", "||", ";", ";;", "|", "|&", "&", "(", ")"}
+REDIRECTIONS = {">", ">>", ">|", "<", "<<", "<<<", ">&", "<&", "&>", "&>>", "<>"}
 WRAPPERS = {"env", "command", "time", "nohup", "{", "}", "!"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 GLOBAL_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
@@ -62,9 +63,14 @@ def tokens(command: str) -> list[str]:
 
 def segments(words: list[str]) -> list[list[str]]:
     result: list[list[str]] = [[]]
-    for word in words:
+    remaining = iter(words)
+    for word in remaining:
         if word in SEPARATORS:
             result.append([])
+        elif word in REDIRECTIONS:
+            if result[-1] and result[-1][-1].isdigit():
+                result[-1].pop()
+            next(remaining, None)
         else:
             result[-1].append(word)
     return [segment for segment in result if segment]
