@@ -37,15 +37,23 @@ PYTHONPATH=$PWD/src .venv/bin/alembic revision --autogenerate -m "..."
 
 From the repository root, `flake8` does not find `backend/.flake8` and floods on `.venv`; pass it: `backend/.venv/bin/flake8 --config backend/.flake8 backend/src backend/tests`. `run_tests.sh` is untracked; never assume it exists, and set `PYTHONPATH` explicitly in CI.
 
-Frontend, from `frontend/`: `npm run dev`, `npm run build`, `npm run lint`. React 19, TypeScript, Vite, Tailwind v4, shadcn/ui (base-nova, built on Base UI, not Radix), feature folders under `src/features/` mirroring the backend modules, not Feature-Sliced Design. `VITE_API_URL` must be `http://localhost:8000`, not `127.0.0.1`: the auth cookie is `samesite=lax` and is not sent across that host mismatch.
+Tests need the database: `docker compose up -d` from the repository root (Postgres on 127.0.0.1:5433). Database and migration rules live in `.claude/rules/database.md`, frontend rules in `.claude/rules/frontend.md`; both load when you touch the files they cover.
+
+## What enforces what
+
+Hooks in `.claude/settings.json` run without being asked: `black` formats every edited backend Python file, and the commit gate blocks a commit unless `black --check`, `flake8` and `pytest` pass. Permissions deny `git push`, `git add .`, `-A`, `-u`, `git commit -a`, `--amend`, `reset --hard` and reading `.env`. A rule that can be enforced belongs in a hook, a permission or a guard test, not only in this file.
 
 ## How we work
 
 - Spec first. Read the slice in SPEC §10 and the sections it names before writing code. Write the failing test for the behaviour, then the code. Use the `spec-slice` skill.
+- Tests passing is not the same as working: after a behaviour change in `backend/src`, run the `verify` skill against the running app.
+- A flaky test is never retried, slept around or skipped. Find the cause, or delete the test and say why in the PR.
+- If a check still fails after three rounds of fixes, stop and hand over with what you tried.
 - Do not bypass the SPEC silently. If it is wrong or silent, stop and report it as "Decision needed" with a recommendation; the owner decides and the answer goes into `docs/DECISIONS.md`.
 - Update SPEC and DECISIONS in the same commit as the change that makes them true.
 - Subagents run on a stronger model than the main session: pass `model: opus` when spawning one, and keep `model: opus` in `.claude/agents/`. Never `inherit`.
-- Review before merge: run the `reviewer` subagent (read-only, fresh context) on the branch, and again after the fixes to confirm they hold. All fixes of one review pass go into one `fix: address review` commit, each with a test that failed first.
+- Review before merge: run the `reviewer` subagent (read-only, fresh context) on the branch, and again after the fixes to confirm they hold. A review holds only for the commit it names. All fixes of one review pass go into one `fix: address review` commit, each with a test that failed first. A pattern the reviewer missed in two PRs goes into the `invariants-check` lessons.
+- Rules only grow if nobody prunes them: when you add a rule here, in `.claude/rules/` or in a skill, delete the one it makes obsolete.
 - Reports use this shape (`report` skill): Done / Numbers (measured only, with the command) / Deviations from SPEC / Decision needed / Next. The report is the PR description.
 - Never invent numbers. A figure needs a command or a file it came from.
 - Teach agent building simply: explain LangGraph, RAG and MCP steps in plain words. Ordinary backend work needs no such explanation.
@@ -55,9 +63,9 @@ Frontend, from `frontend/`: `npm run dev`, `npm run build`, `npm run lint`. Reac
 
 - One branch per PR, named by commit type (`feat/...`, `fix/...`, `docs/...`), always cut from a fresh `origin/main`: `git fetch origin`, then branch from `origin/main`. Never commit to `main`. Do not create a branch the owner did not ask for.
 - Commit locally; **never run `git push`**: the owner pushes, opens the PR and merges. `git push` is denied in `.claude/settings.json`.
-- Stage files by explicit path. Never `git add .`, never stage `.env` or `.claude/settings.local.json`.
+- Stage files by explicit path; never stage `.env` or `.claude/settings.local.json`.
 - No `--amend`, `reset`, `rebase` or force options on existing history unless the owner asks.
-- Message: Conventional Commits in English, one line `type: short action`, no body unless needed. Two to four larger commits per PR, each green on its own (`pytest`, `black --check`, `flake8`). Add the trailer `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` when you wrote the change.
+- Message: Conventional Commits in English, one line `type: short action`, no body unless needed. Two to four larger commits per PR, each green on its own (`pytest`, `black --check`, `flake8`). When you wrote the change, add a `Co-Authored-By` trailer naming the model that wrote it, e.g. `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - After a series of commits show `git log --stat`.
 - A PR description is the report, without a "Generated with" footer.
 
@@ -71,18 +79,9 @@ Python, FastAPI, SQLAlchemy 2 (async), Alembic, PostgreSQL 16 with pgvector, Lan
 - Repositories are always an ABC plus a `...Impl`, one pair per aggregate, exposing only the domain methods that aggregate needs. No repository is scoped to a user by default: learner-owned queries filter by `user_id` themselves, and `test_repositories_scope_by_user.py` fails otherwise. Unscoped bulk reads live only on `UserRepository`.
 - Domain errors are `AppException` subclasses with a code and a message; no bare `pass` stubs.
 - Settings fields have no defaults; model names never encode a tier (`GEMINI_MODEL`).
-- One Alembic migration per PR; a further schema change edits the PR's migration. Every model is imported in `src/core/registry.py`.
 - No comments in Python code, including ones that explain why (`test_no_comments.py` fails otherwise). Explanations go to SPEC, DECISIONS, the PR or the commit message. Tool directives such as `# noqa` stay.
 - Apply `kiss`-style restraint: no speculative abstraction; one developer. Extract duplication only at the third occurrence.
 - A module whose purpose is not obvious from its name is explained in the PR or moved somewhere that makes it obvious. Public classes carry no leading underscore.
-
-## Database
-
-`docker compose up -d` from the repository root brings up Postgres 16 on **127.0.0.1:5433** (the standard port is taken by a local brew `postgresql@14`). `DATABASE_URL` and `TEST_DATABASE_URL` default to 5433.
-
-Tests build their schema by dropping, recreating and running `alembic upgrade head` against `TEST_DATABASE_URL`, never `Base.metadata.create_all`, so a missing migration fails the suite. Each test runs inside a connection-level transaction that is rolled back afterwards. `TEST_DATABASE_URL` must name a database ending in `_test` and differ from `DATABASE_URL`; `pytest_configure` aborts otherwise, because the suite drops every table it is pointed at.
-
-Never pass a database URL through `alembic.Config.set_main_option`: `ConfigParser` treats `%` as interpolation. The URL travels via `config.attributes["sqlalchemy.url"]`.
 
 ## Secrets and data
 
