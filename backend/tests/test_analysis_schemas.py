@@ -10,7 +10,7 @@ def _kwargs(**overrides: object) -> dict[str, object]:
         "vocabulary_findings": [],
         "fluency_findings": {"summary": "Steady pace."},
         "task_completion": {"goals": []},
-        "focus_points": ["Practice past-tense verbs"],
+        "focus_points": [_point("Practice past-tense verbs")],
         "skill_observations": [],
         "new_facts": [],
     }
@@ -18,37 +18,27 @@ def _kwargs(**overrides: object) -> dict[str, object]:
     return base
 
 
+def _point(text: str) -> dict[str, str]:
+    return {"text": text, "evidence": "Yesterday I go"}
+
+
 def test_a_single_focus_point_is_accepted() -> None:
-    result = SessionAnalysisResult(**_kwargs(focus_points=["one thing"]))
-    assert result.focus_points == ["one thing"]
+    result = SessionAnalysisResult(**_kwargs(focus_points=[_point("one thing")]))
+    assert [point.text for point in result.focus_points] == ["one thing"]
 
 
 def test_three_focus_points_are_accepted() -> None:
-    result = SessionAnalysisResult(**_kwargs(focus_points=["a", "b", "c"]))
-    assert result.focus_points == ["a", "b", "c"]
+    points = [_point("a"), _point("b"), _point("c")]
+    result = SessionAnalysisResult(**_kwargs(focus_points=points))
+    assert len(result.focus_points) == 3
 
 
-def test_zero_focus_points_is_rejected() -> None:
-    with pytest.raises(ValidationError):
-        SessionAnalysisResult(**_kwargs(focus_points=[]))
+def test_no_focus_points_is_accepted() -> None:
+    result = SessionAnalysisResult(**_kwargs(focus_points=[]))
+    assert result.focus_points == []
 
 
 def test_more_than_three_focus_points_is_rejected() -> None:
+    points = [_point(text) for text in "abcd"]
     with pytest.raises(ValidationError):
-        SessionAnalysisResult(**_kwargs(focus_points=["a", "b", "c", "d"]))
-
-
-def test_a_skill_observation_without_evidence_is_rejected() -> None:
-    observation = {
-        "skill_key": "irregular_past_forms",
-        "outcome": "error",
-        "note": "Used present tense for a past event.",
-    }
-
-    with pytest.raises(ValidationError):
-        SessionAnalysisResult(**_kwargs(skill_observations=[observation]))
-
-
-def test_a_persona_fact_without_evidence_is_rejected() -> None:
-    with pytest.raises(ValidationError):
-        SessionAnalysisResult(**_kwargs(new_facts=[{"fact": "Moving into AI."}]))
+        SessionAnalysisResult(**_kwargs(focus_points=points))

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from analysis.schemas import (
     FluencyAssessment,
+    FocusPoint,
     GrammarTriage,
     PersonaFact,
     SessionAnalysisResult,
@@ -38,7 +39,12 @@ def analysis_result(
         vocabulary_findings=[],
         fluency_findings=FluencyAssessment(summary="Steady, with a few pauses."),
         task_completion=TaskCompletion(goals=[]),
-        focus_points=["Practice past-tense verbs"],
+        focus_points=[
+            FocusPoint(
+                text="Practice past-tense verbs",
+                evidence="Yesterday I go to the office.",
+            )
+        ],
         skill_observations=skill_observations or [],
         new_facts=new_facts or [],
     )

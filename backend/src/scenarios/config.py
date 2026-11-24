@@ -10,7 +10,14 @@ class Scenario:
     persona: str
     goal_checklist: tuple[str, ...]
     difficulty: str
+    trains_skills: tuple[str, ...]
 
+
+_EVERY_CONVERSATION: tuple[str, ...] = (
+    "articles",
+    "subject_verb_agreement",
+    "negation_and_auxiliaries",
+)
 
 _SCENARIOS: dict[str, Scenario] = {
     scenario.id: scenario
@@ -30,6 +37,13 @@ _SCENARIOS: dict[str, Scenario] = {
                 "give the candidate a chance to ask questions",
             ),
             difficulty="intermediate",
+            trains_skills=(
+                "present_perfect_vs_past_simple",
+                "irregular_past_forms",
+                "tense_consistency",
+                "question_word_order",
+                *_EVERY_CONVERSATION,
+            ),
         ),
         Scenario(
             id="daily_standup",
@@ -44,6 +58,13 @@ _SCENARIOS: dict[str, Scenario] = {
                 "mention any blockers, or state there are none",
             ),
             difficulty="beginner",
+            trains_skills=(
+                "irregular_past_forms",
+                "present_simple_vs_continuous",
+                "future_forms",
+                "tense_consistency",
+                *_EVERY_CONVERSATION,
+            ),
         ),
         Scenario(
             id="client_call",
@@ -58,6 +79,15 @@ _SCENARIOS: dict[str, Scenario] = {
                 "confirm the next milestone and rough timeline",
             ),
             difficulty="intermediate",
+            trains_skills=(
+                "present_perfect_vs_past_simple",
+                "future_forms",
+                "conditionals",
+                "modal_verbs",
+                "countable_uncountable_nouns",
+                "reported_speech",
+                *_EVERY_CONVERSATION,
+            ),
         ),
         Scenario(
             id="small_talk_networking",
@@ -72,6 +102,13 @@ _SCENARIOS: dict[str, Scenario] = {
                 "find and continue at least one shared topic",
             ),
             difficulty="beginner",
+            trains_skills=(
+                "present_simple_vs_continuous",
+                "question_word_order",
+                "gerund_vs_infinitive",
+                "prepositions_of_place",
+                *_EVERY_CONVERSATION,
+            ),
         ),
         Scenario(
             id="presentation_qa",
@@ -86,6 +123,14 @@ _SCENARIOS: dict[str, Scenario] = {
                 "stay composed when challenged on a point",
             ),
             difficulty="advanced",
+            trains_skills=(
+                "comparatives_superlatives",
+                "conditionals",
+                "relative_clauses",
+                "reported_speech",
+                "modal_verbs",
+                *_EVERY_CONVERSATION,
+            ),
         ),
         Scenario(
             id="phone_booking",
@@ -100,9 +145,20 @@ _SCENARIOS: dict[str, Scenario] = {
                 "confirm contact details for the booking",
             ),
             difficulty="beginner",
+            trains_skills=(
+                "prepositions_of_time",
+                "modal_verbs",
+                "question_word_order",
+                "future_forms",
+                *_EVERY_CONVERSATION,
+            ),
         ),
     )
 }
+
+
+def list_scenarios() -> tuple[Scenario, ...]:
+    return tuple(_SCENARIOS.values())
 
 
 def get_scenario(scenario_id: str) -> Scenario:

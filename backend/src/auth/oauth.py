@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.starlette_client import OAuth, StarletteOAuth2App
 from fastapi import Request
@@ -18,10 +20,11 @@ def build_google_oauth(settings: Settings) -> OAuth:
     return oauth
 
 
-async def exchange_google_token(
+async def fetch_google_userinfo(
     google: StarletteOAuth2App, request: Request
-) -> dict[str, object]:
+) -> Mapping[str, object]:
     try:
-        return await google.authorize_access_token(request)
+        token = await google.authorize_access_token(request)
     except OAuthError as error:
         raise GoogleAuthenticationError() from error
+    return token["userinfo"]

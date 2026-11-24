@@ -40,7 +40,10 @@ POLL_TIMEOUT_SECONDS = 3
 POLL_INTERVAL_SECONDS = 0.05
 MAX_FRAMES_TO_SCAN = 50
 END_SESSION_FRAME = {"type": "end_session"}
-USER_MESSAGE_FRAME = {"type": "user_message", "content": "Sure, let's continue."}
+USER_MESSAGE_FRAME = {
+    "type": "user_message",
+    "content": "Yesterday I go to the office.",
+}
 
 Polled = TypeVar("Polled")
 

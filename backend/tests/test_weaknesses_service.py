@@ -228,3 +228,16 @@ async def test_get_active_weaknesses_only_includes_active_and_probation(
     active = await service.get_active_weaknesses(user_id)
 
     assert {record.skill_key for record in active} == {"articles"}
+
+
+@pytest.mark.asyncio
+async def test_list_weaknesses_includes_every_state(
+    service: WeaknessService, user_id: uuid.UUID, session_id: uuid.UUID
+) -> None:
+    await service.record_error(
+        user_id, WeaknessCategory.GRAMMAR, "articles", session_id
+    )
+
+    listed = await service.list_weaknesses(user_id)
+
+    assert {record.skill_key for record in listed} == {"articles"}

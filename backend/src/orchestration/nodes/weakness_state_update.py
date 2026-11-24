@@ -18,21 +18,17 @@ async def weakness_state_update_node(
         )
 
         for observation in state["skill_observations"]:
-            category = category_of(observation["skill_key"])
-            if observation["outcome"] == "error":
-                await weakness_service.record_error(
-                    state["user_id"],
-                    category,
-                    observation["skill_key"],
-                    state["session_id"],
-                )
-            else:
-                await weakness_service.record_clean_use(
-                    state["user_id"],
-                    category,
-                    observation["skill_key"],
-                    state["session_id"],
-                )
+            record = (
+                weakness_service.record_error
+                if observation["outcome"] == "error"
+                else weakness_service.record_clean_use
+            )
+            await record(
+                state["user_id"],
+                category_of(observation["skill_key"]),
+                observation["skill_key"],
+                state["session_id"],
+            )
 
         await session.commit()
 

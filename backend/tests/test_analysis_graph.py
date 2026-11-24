@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from analysis.repository import SessionAnalysisRepositoryImpl
 from analysis.schemas import (
     FluencyAssessment,
+    FocusPoint,
     GoalOutcome,
     LanguageFinding,
     PersonaFact,
@@ -24,6 +25,7 @@ from persona.repository import PersonaMemoryRepositoryImpl
 from persona.service import PersonaService
 from practice.repository import LearningSessionRepositoryImpl
 from practice.service import PracticeService
+from progress.repository import SessionProgressRepositoryImpl
 from rag.entries import ContentEntry, EmbeddedEntry
 from rag.models import Corpus
 from rag.repository import ContentChunkRepositoryImpl
@@ -41,6 +43,7 @@ from tests.fakes import (
 
 TRANSCRIPT = [
     {"role": "assistant", "content": "Hi, thanks for joining!"},
+    {"role": "user", "content": "Hi, nice to meet you."},
     {"role": "user", "content": "Yesterday I go to the office."},
     {"role": "user", "content": "I have a backend interview next week."},
     {"role": "assistant", "content": "Thanks for practising today."},
@@ -130,7 +133,12 @@ async def test_session_analysis_writes_a_real_analysis_row(
                         )
                     ]
                 ),
-                focus_points=["Practice past-tense verbs"],
+                focus_points=[
+                    FocusPoint(
+                        text="Practice past-tense verbs",
+                        evidence="Yesterday I go to the office.",
+                    )
+                ],
                 skill_observations=[
                     SkillObservation(
                         skill_key="irregular_past_forms",
@@ -154,7 +162,12 @@ async def test_session_analysis_writes_a_real_analysis_row(
     )
     stored = await analysis_service.get_analysis(session_id, user_id)
     assert stored is not None
-    assert stored.focus_points == ["Practice past-tense verbs"]
+    assert stored.focus_points == [
+        {
+            "text": "Practice past-tense verbs",
+            "evidence": "Yesterday I go to the office.",
+        }
+    ]
     assert stored.grammar_findings == [
         {
             "evidence": "Yesterday I go to the office.",
@@ -467,3 +480,19 @@ async def test_verified_evidence_costs_no_second_analysis_call(
     await _analyse(session_id, user_id, session_factory, llm)
 
     assert len(llm.requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_progress_update_writes_a_progress_row_for_the_session(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+) -> None:
+    await _analyse(session_id, user_id, session_factory, FakeLLMClient())
+
+    progress = await SessionProgressRepositoryImpl(session).get_by_session_id(
+        session_id, user_id
+    )
+    assert progress is not None
+    assert progress.goals_total == len(get_scenario("job_interview").goal_checklist)

@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -63,7 +64,12 @@ async def test_an_analysis_is_created_and_read_back_by_session_id(
 
     assert found is not None
     assert found.fluency_findings == {"summary": "Steady, with a few pauses."}
-    assert found.focus_points == ["Practice past-tense verbs"]
+    assert found.focus_points == [
+        {
+            "text": "Practice past-tense verbs",
+            "evidence": "Yesterday I go to the office.",
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -107,3 +113,28 @@ async def test_a_second_analysis_for_the_same_session_is_rejected(
 
     with pytest.raises(IntegrityError):
         await repository.create(session_id, user_id, analysis_result())
+
+
+@pytest.mark.asyncio
+async def test_analyses_are_listed_newest_first(
+    session: AsyncSession,
+    repository: SessionAnalysisRepository,
+    user_id: uuid.UUID,
+) -> None:
+    sessions = LearningSessionRepositoryImpl(session)
+    first_day = datetime(2026, 11, 1, tzinfo=UTC)
+    created = []
+    for day in (1, 2, 0):
+        record = await sessions.create(user_id, "job_interview")
+        analysis = await repository.create(record.id, user_id, analysis_result())
+        analysis.created_at = first_day + timedelta(days=day)
+        created.append(analysis)
+    await session.flush()
+
+    found = await repository.list_by_user(user_id)
+
+    assert [analysis.id for analysis in found] == [
+        created[1].id,
+        created[0].id,
+        created[2].id,
+    ]

@@ -37,8 +37,10 @@ class PracticeService:
             raise LearningSessionNotFoundError()
         return record
 
-    async def list_sessions(self, user_id: uuid.UUID) -> list[LearningSession]:
-        return await self._repository.get_by_user(user_id)
+    async def list_sessions(
+        self, user_id: uuid.UUID, limit: int, offset: int
+    ) -> list[LearningSession]:
+        return await self._repository.get_by_user(user_id, limit, offset)
 
     async def finish_session(
         self,

@@ -12,7 +12,7 @@ from auth.dependencies import (
     get_google_oauth,
     get_settings,
 )
-from auth.oauth import exchange_google_token
+from auth.oauth import fetch_google_userinfo
 from auth.schemas import LoginRequest, RegisterRequest, UserPublic
 from auth.service import AuthService
 from config import Settings
@@ -82,8 +82,8 @@ async def google_callback(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     app_settings: Annotated[Settings, Depends(get_settings)],
 ) -> RedirectResponse:
-    token = await exchange_google_token(google, request)
-    _, session_token = await auth_service.login_with_google_userinfo(token["userinfo"])
+    userinfo = await fetch_google_userinfo(google, request)
+    _, session_token = await auth_service.login_with_google_userinfo(userinfo)
 
     redirect = RedirectResponse(url=app_settings.FRONTEND_URL)
     set_session_cookie(redirect, session_token, app_settings)

@@ -1,5 +1,12 @@
 from analysis.evidence import find_unquoted_evidence, keep_quoted, learner_turns
-from analysis.schemas import PersonaFact, SkillObservation
+from analysis.schemas import (
+    FocusPoint,
+    GoalOutcome,
+    LanguageFinding,
+    PersonaFact,
+    SkillObservation,
+    TaskCompletion,
+)
 from tests.fakes import analysis_result
 
 TRANSCRIPT = [
@@ -88,3 +95,48 @@ def test_two_words_are_enough_to_be_evidence() -> None:
     result = analysis_result(skill_observations=[_observation("I go")])
 
     assert find_unquoted_evidence(result, turns) == []
+
+
+def test_findings_goals_and_focus_points_are_checked_and_dropped() -> None:
+    turns = learner_turns(TRANSCRIPT)
+    real = "Yesterday I go to the office"
+    invented = "I have a dog"
+    result = analysis_result().model_copy(
+        update={
+            "grammar_findings": [
+                LanguageFinding(evidence=real, issue="i", correction="c"),
+                LanguageFinding(evidence=invented, issue="i", correction="c"),
+            ],
+            "vocabulary_findings": [
+                LanguageFinding(evidence=invented, issue="i", correction="c")
+            ],
+            "task_completion": TaskCompletion(
+                goals=[
+                    GoalOutcome(goal="a", achieved=True, evidence=real),
+                    GoalOutcome(goal="b", achieved=True, evidence=invented),
+                ]
+            ),
+            "focus_points": [
+                FocusPoint(text="kept", evidence=real),
+                FocusPoint(text="dropped", evidence=invented),
+            ],
+        }
+    )
+
+    assert find_unquoted_evidence(result, turns) == [invented] * 4
+    filtered = keep_quoted(result, turns)
+    assert [finding.evidence for finding in filtered.grammar_findings] == [real]
+    assert filtered.vocabulary_findings == []
+    assert [goal.goal for goal in filtered.task_completion.goals] == ["a"]
+    assert [point.text for point in filtered.focus_points] == ["kept"]
+
+
+def test_a_goal_that_was_not_achieved_needs_no_quote() -> None:
+    turns = learner_turns(TRANSCRIPT)
+    missed = GoalOutcome(goal="greet", achieved=False, evidence="")
+    result = analysis_result().model_copy(
+        update={"task_completion": TaskCompletion(goals=[missed])}
+    )
+
+    assert find_unquoted_evidence(result, turns) == []
+    assert keep_quoted(result, turns).task_completion.goals == [missed]

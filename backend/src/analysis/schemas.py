@@ -34,6 +34,11 @@ class SkillObservation(BaseModel):
     note: str
 
 
+class FocusPoint(BaseModel):
+    text: str
+    evidence: str = Field(description=EVIDENCE_DESCRIPTION)
+
+
 class GrammarTriage(BaseModel):
     skill_keys: list[GrammarSkillKey] = Field(
         description=(
@@ -53,6 +58,6 @@ class SessionAnalysisResult(BaseModel):
     vocabulary_findings: list[LanguageFinding]
     fluency_findings: FluencyAssessment
     task_completion: TaskCompletion
-    focus_points: list[str] = Field(min_length=1, max_length=3)
+    focus_points: list[FocusPoint] = Field(max_length=3)
     skill_observations: list[SkillObservation]
     new_facts: list[PersonaFact]

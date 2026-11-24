@@ -45,6 +45,19 @@ class ContentChunkRepository(ABC):
         raise NotImplementedError()
 
 
+def _chunk_values(item: EmbeddedEntry) -> dict[str, object]:
+    return {
+        "corpus": item.entry.corpus,
+        "scenario_id": item.entry.scenario_id,
+        "skill_key": item.entry.skill_key,
+        "title": item.entry.title,
+        "content": item.entry.content,
+        "content_hash": item.entry.content_hash,
+        "embedding_model": item.embedding_model,
+        "embedding": item.embedding,
+    }
+
+
 class ContentChunkRepositoryImpl(ContentChunkRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -67,19 +80,7 @@ class ContentChunkRepositoryImpl(ContentChunkRepository):
         if not embedded:
             return
         statement = insert(ContentChunk).values(
-            [
-                {
-                    "corpus": item.entry.corpus,
-                    "scenario_id": item.entry.scenario_id,
-                    "skill_key": item.entry.skill_key,
-                    "title": item.entry.title,
-                    "content": item.entry.content,
-                    "content_hash": item.entry.content_hash,
-                    "embedding_model": item.embedding_model,
-                    "embedding": item.embedding,
-                }
-                for item in embedded
-            ]
+            [_chunk_values(item) for item in embedded]
         )
         await self._session.execute(
             statement.on_conflict_do_update(

@@ -30,6 +30,9 @@ class WeaknessService:
     async def get_active_weaknesses(self, user_id: uuid.UUID) -> list[WeaknessRecord]:
         return await self._repository.get_active_for_user(user_id)
 
+    async def list_weaknesses(self, user_id: uuid.UUID) -> list[WeaknessRecord]:
+        return await self._repository.get_all_for_user(user_id)
+
     async def record_error(
         self,
         user_id: uuid.UUID,

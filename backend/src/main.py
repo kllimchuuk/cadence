@@ -17,9 +17,13 @@ from core.exceptions import AppException
 from llm.factory import LLMClientFactory
 from orchestration.checkpointer import prepare_checkpointer
 from orchestration.graph import build_analysis_graph, build_conversation_graph
+from practice.router import router as practice_router
+from progress.router import router as progress_router
 from rag.repository import ContentChunkRepositoryImpl
 from rag.service import ContentCorpusService
 from realtime.router import router as realtime_router
+from scenarios.router import router as scenarios_router
+from weaknesses.router import router as weaknesses_router
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +120,10 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(realtime_router)
+    app.include_router(scenarios_router)
+    app.include_router(practice_router)
+    app.include_router(weaknesses_router)
+    app.include_router(progress_router)
 
     return app
 
