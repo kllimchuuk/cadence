@@ -59,12 +59,16 @@ class GeminiEmbeddingClient:
         vectors = [
             list(embedding.values or []) for embedding in response.embeddings or []
         ]
-        if len(vectors) != len(texts):
+        self._require_valid(vectors, len(texts))
+        return vectors
+
+    @staticmethod
+    def _require_valid(vectors: list[list[float]], expected_count: int) -> None:
+        if len(vectors) != expected_count:
             raise LLMResponseError(
-                f"expected {len(texts)} embeddings, got {len(vectors)}"
+                f"expected {expected_count} embeddings, got {len(vectors)}"
             )
         if any(len(vector) != EMBEDDING_DIMENSIONS for vector in vectors):
             raise LLMResponseError(
                 f"embeddings are not {EMBEDDING_DIMENSIONS}-dimensional"
             )
-        return vectors

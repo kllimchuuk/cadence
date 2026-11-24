@@ -1,9 +1,12 @@
+import uuid
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import datetime
 from enum import StrEnum
 from statistics import fmean
 
 from progress.models import SessionProgress
+from progress.rates import calculate_rates
 
 BASELINE_SESSIONS = 3
 STEADY_TOLERANCE = 0.1
@@ -31,8 +34,24 @@ class ProgressTrend:
 
 
 @dataclass(frozen=True)
+class SessionProgressEntry:
+    session_id: uuid.UUID
+    created_at: datetime
+    grammar_issue_count: int
+    vocabulary_issue_count: int
+    goals_achieved: int
+    goals_total: int
+    learner_word_count: int
+    total_word_count: int
+    grammar_issue_rate: float
+    vocabulary_issue_rate: float
+    goal_completion_rate: float
+    learner_word_share: float
+
+
+@dataclass(frozen=True)
 class ProgressReport:
-    sessions: list[SessionProgress]
+    sessions: list[SessionProgressEntry]
     trend: ProgressTrend
 
 
@@ -46,8 +65,8 @@ def _direction(baseline: float, latest: float, higher_is_better: bool) -> Direct
 
 
 def _metric_trend(
-    sessions: Sequence[SessionProgress],
-    metric: Callable[[SessionProgress], float],
+    sessions: Sequence[SessionProgressEntry],
+    metric: Callable[[SessionProgressEntry], float],
     higher_is_better: bool,
 ) -> MetricTrend | None:
     if len(sessions) < 2:
@@ -58,7 +77,22 @@ def _metric_trend(
     return MetricTrend(baseline, latest, _direction(baseline, latest, higher_is_better))
 
 
-def build_report(sessions: list[SessionProgress]) -> ProgressReport:
+def _entry(progress: SessionProgress) -> SessionProgressEntry:
+    return SessionProgressEntry(
+        session_id=progress.session_id,
+        created_at=progress.created_at,
+        grammar_issue_count=progress.grammar_issue_count,
+        vocabulary_issue_count=progress.vocabulary_issue_count,
+        goals_achieved=progress.goals_achieved,
+        goals_total=progress.goals_total,
+        learner_word_count=progress.learner_word_count,
+        total_word_count=progress.total_word_count,
+        **asdict(calculate_rates(progress)),
+    )
+
+
+def build_report(records: list[SessionProgress]) -> ProgressReport:
+    sessions = [_entry(record) for record in records]
     return ProgressReport(
         sessions=sessions,
         trend=ProgressTrend(

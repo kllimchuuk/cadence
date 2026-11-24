@@ -11,14 +11,14 @@ from scenarios.config import get_scenario
 SCENARIO_CONTENT_FILE = "scenario_content.yaml"
 
 
-class _ScenarioEntry(BaseModel):
+class ScenarioContentEntry(BaseModel):
     model_config = ConfigDict(extra="forbid", str_min_length=1)
 
     title: str
     content: str
 
 
-_SCENARIO_FILE = TypeAdapter(dict[str, list[_ScenarioEntry]])
+_SCENARIO_FILE = TypeAdapter(dict[str, list[ScenarioContentEntry]])
 
 
 def _load_scenario_content(path: Path) -> list[ContentEntry]:

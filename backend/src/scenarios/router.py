@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from auth.dependencies import get_current_user
+from scenarios.config import Scenario
 from scenarios.schemas import ScenarioPublic, ScenarioRecommendationPublic
 from scenarios.service import (
     ScenarioCatalogService,
@@ -22,8 +23,8 @@ router = APIRouter(prefix="/scenarios", tags=["scenarios"])
 )
 async def list_scenarios(
     catalog: Annotated[ScenarioCatalogService, Depends(get_scenario_catalog_service)],
-) -> list[ScenarioPublic]:
-    return [ScenarioPublic.model_validate(s) for s in catalog.list_scenarios()]
+) -> tuple[Scenario, ...]:
+    return catalog.list_scenarios()
 
 
 @router.get("/recommendation", response_model=ScenarioRecommendationPublic)

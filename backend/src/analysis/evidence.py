@@ -10,11 +10,11 @@ MIN_QUOTE_WORDS = 2
 _NON_WORD = re.compile(r"[\W_]+")
 
 
-class _Quoted(Protocol):
+class Quoted(Protocol):
     evidence: str
 
 
-_QuotedT = TypeVar("_QuotedT", bound=_Quoted)
+QuotedT = TypeVar("QuotedT", bound=Quoted)
 
 
 def _normalize(text: str) -> str:
@@ -50,7 +50,7 @@ def find_unquoted_evidence(
     return [quote for quote in quotes if not _is_quoted(quote, turns)]
 
 
-def _quoted(items: Sequence[_QuotedT], turns: Sequence[str]) -> list[_QuotedT]:
+def _quoted(items: Sequence[QuotedT], turns: Sequence[str]) -> list[QuotedT]:
     return [item for item in items if _is_quoted(item.evidence, turns)]
 
 

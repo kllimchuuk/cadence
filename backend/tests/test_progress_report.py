@@ -1,6 +1,7 @@
 import uuid
 
 from progress.models import SessionProgress
+from progress.rates import calculate_rates
 from progress.report import Direction, build_report
 
 
@@ -20,27 +21,31 @@ def _progress(
 
 
 def test_rates_are_derived_from_the_stored_counts() -> None:
-    progress = _progress(grammar_issues=3, goals_achieved=2, learner_words=150)
+    rates = calculate_rates(
+        _progress(grammar_issues=3, goals_achieved=2, learner_words=150)
+    )
 
-    assert progress.grammar_issue_rate == 2.0
-    assert progress.goal_completion_rate == 0.5
-    assert progress.learner_word_share == 0.75
+    assert rates.grammar_issue_rate == 2.0
+    assert rates.goal_completion_rate == 0.5
+    assert rates.learner_word_share == 0.75
 
 
 def test_rates_of_an_empty_session_are_zero() -> None:
-    progress = SessionProgress(
-        grammar_issue_count=4,
-        vocabulary_issue_count=4,
-        goals_achieved=0,
-        goals_total=0,
-        learner_word_count=0,
-        total_word_count=0,
+    rates = calculate_rates(
+        SessionProgress(
+            grammar_issue_count=4,
+            vocabulary_issue_count=4,
+            goals_achieved=0,
+            goals_total=0,
+            learner_word_count=0,
+            total_word_count=0,
+        )
     )
 
-    assert progress.grammar_issue_rate == 0.0
-    assert progress.vocabulary_issue_rate == 0.0
-    assert progress.goal_completion_rate == 0.0
-    assert progress.learner_word_share == 0.0
+    assert rates.grammar_issue_rate == 0.0
+    assert rates.vocabulary_issue_rate == 0.0
+    assert rates.goal_completion_rate == 0.0
+    assert rates.learner_word_share == 0.0
 
 
 def test_there_is_no_trend_before_a_second_session() -> None:
