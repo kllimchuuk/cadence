@@ -291,3 +291,92 @@ def test_unparsable_git_command_is_blocked(
     hook: ModuleType, monkeypatch: pytest.MonkeyPatch, command: str
 ) -> None:
     assert run_main(hook, monkeypatch, command) == 2
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit --amen -m x",
+        "git commit --am -m x",
+        "git commit --al -m x",
+        "git add --forc backend/src/a.py",
+        "git add --upd",
+        "git add --pathspec-from-file=list.txt",
+        "git add --pathspec-from-file list.txt",
+        "git commit --pathspec-from-file=list.txt -m x",
+        "git switch --discard main",
+        "git switch --forc main",
+    ],
+)
+def test_abbreviated_and_file_fed_options_are_blocked(
+    hook: ModuleType, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    assert run_main(hook, monkeypatch, command) == 2
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit -m x backend/src/a.py",
+        "git commit -m x -- backend/src/a.py",
+        "git commit -o -m x backend/src/a.py",
+        "git commit --only -m x",
+        "git commit -i -m x backend/src/a.py",
+        "git commit --include -m x",
+    ],
+)
+def test_commit_limited_to_paths_is_blocked(
+    hook: ModuleType, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    assert run_main(hook, monkeypatch, command) == 2
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit --mess x",
+        "git commit -uall -m x",
+        "git commit -q --no-verify --author 'A <a@b.c>' -m x",
+        "git commit -q -m \"$(cat <<'EOF'\nfix: x\n\nCo-Authored-By: A <a@b.c>\nEOF\n)\"",
+        'git commit -q -m "fix: address review\n\nCo-Authored-By: A <a@b.c>"',
+    ],
+)
+def test_ordinary_commits_pass(
+    hook: ModuleType, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    monkeypatch.setattr(hook, "run_checks", lambda: None)
+
+    assert run_main(hook, monkeypatch, command) == 0
+
+
+def test_invalid_event_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    hook = load_hook()
+    monkeypatch.setattr(sys, "stdin", io.StringIO("not json"))
+
+    with pytest.raises(SystemExit) as exit_info:
+        hook.main()
+
+    assert exit_info.value.code == 2
+
+
+def git(repository: Path, *arguments: str) -> None:
+    subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
+
+
+def test_git_queries_report_staged_unstaged_and_untracked_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    hook = load_hook()
+    git(tmp_path, "init", "-q")
+    (tmp_path / "backend").mkdir()
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "backend" / "tracked.py").write_text("a = 1\n")
+    (tmp_path / "backend" / "staged.py").write_text("b = 1\n")
+    git(tmp_path, "add", "backend/tracked.py", "backend/staged.py")
+    (tmp_path / "backend" / "tracked.py").write_text("a = 2\n")
+    (tmp_path / "backend" / "new.py").write_text("c = 1\n")
+    (tmp_path / "docs" / "notes.md").write_text("x\n")
+    monkeypatch.setattr(hook, "REPOSITORY", tmp_path)
+
+    assert hook.staged_paths() == ["backend/staged.py", "backend/tracked.py"]
+    assert sorted(hook.dirty_paths()) == ["backend/new.py", "backend/tracked.py"]

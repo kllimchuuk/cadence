@@ -44,7 +44,7 @@ Tests need the database: `docker compose up -d` from the repository root (Postgr
 Hooks in `.claude/settings.json` run without being asked:
 
 - `format_python.py` runs `black` on every edited file under `backend/src`, `tests` and `migrations`.
-- `commit_gate.py` reads every `git` call in a Bash command, wherever its flags stand, and blocks: `git add` of anything but explicit paths (`.`, `:/`, globs, `-A`, `-u`, `-f`) or of `.env` and `settings.local.json`; `git commit` with `--amend` or `-a`; `git switch -f` or `--discard-changes`; and a commit while a secret is staged, while files under `backend/` or `.claude/hooks/` are changed but unstaged, or while `black --check`, `flake8` or `pytest` fails. If it cannot parse a git command, it blocks it.
+- `commit_gate.py` reads the `git` calls written directly in a Bash command (not ones hidden behind `sh -c`, `xargs` or an alias), wherever their flags stand and with long options abbreviated or not, and blocks: `git add` of anything but explicit paths (`.`, `:/`, globs, `-A`, `-u`, `-f`, `--pathspec-from-file`) or of `.env` and `settings.local.json`; `git commit` with `--amend`, `-a`, `-o`, `-i` or paths; `git switch -f` or `--discard-changes`; and a commit while a secret is staged, while files under `backend/` or `.claude/hooks/` are changed but unstaged, or while `black --check`, `flake8` or `pytest` fails. If it cannot parse a git command (an apostrophe in a heredoc, for one), it blocks it; stage and commit in plain separate commands.
 - Permissions deny `git push`, `reset --hard` and reading `.env`.
 
 A rule that can be enforced belongs in a hook, a permission or a guard test, not only in this file.

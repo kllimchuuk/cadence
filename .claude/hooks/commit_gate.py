@@ -19,10 +19,24 @@ GLOBAL_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespac
 
 SECRET_NAMES = {".env", "settings.local.json"}
 MASS_PATHSPECS = {".", "./", "..", ":", ":/"}
-ADD_FORBIDDEN_LONG = {"--all", "--update", "--force", "--no-ignore-removal"}
+ADD_FORBIDDEN_LONG = {
+    "--all",
+    "--update",
+    "--force",
+    "--no-ignore-removal",
+    "--pathspec-from-file",
+}
 ADD_FORBIDDEN_SHORT = set("Auf")
-COMMIT_FORBIDDEN_LONG = {"--amend", "--all"}
+COMMIT_FORBIDDEN_LONG = {
+    "--amend",
+    "--all",
+    "--only",
+    "--include",
+    "--pathspec-from-file",
+}
+COMMIT_FORBIDDEN_SHORT = set("aoi")
 COMMIT_SHORT_WITH_VALUE = set("mFCct")
+COMMIT_SHORT_WITH_ATTACHED_VALUE = set("uS")
 COMMIT_LONG_WITH_VALUE = {
     "--message",
     "--file",
@@ -78,13 +92,18 @@ def is_secret(path: str) -> bool:
     return Path(path).name in SECRET_NAMES
 
 
+def abbreviates(argument: str, options: set[str]) -> bool:
+    name = argument.split("=")[0]
+    return len(name) > 2 and any(option.startswith(name) for option in options)
+
+
 def add_problem(arguments: list[str]) -> str | None:
     paths_only = False
     for argument in arguments:
         if argument == "--":
             paths_only = True
         elif not paths_only and argument.startswith("--"):
-            if argument.split("=")[0] in ADD_FORBIDDEN_LONG:
+            if abbreviates(argument, ADD_FORBIDDEN_LONG):
                 return f"git add {argument} stages more than the named paths"
         elif not paths_only and argument.startswith("-") and len(argument) > 1:
             if ADD_FORBIDDEN_SHORT & set(argument[1:]):
@@ -99,31 +118,44 @@ def add_problem(arguments: list[str]) -> str | None:
 
 
 def commit_problem(arguments: list[str]) -> str | None:
+    partial = (
+        "commits something other than the staged tree the checks run on; "
+        "stage exactly what the commit needs and commit without paths"
+    )
     remaining = iter(arguments)
     for argument in remaining:
         if argument == "--":
+            if next(remaining, None) is not None:
+                return f"git commit with paths {partial}"
             break
         if argument.startswith("--"):
-            name = argument.split("=")[0]
-            if name in COMMIT_FORBIDDEN_LONG:
-                return f"git commit {name} is not allowed"
-            if name in COMMIT_LONG_WITH_VALUE and "=" not in argument:
+            if abbreviates(argument, {"--amend"}):
+                return "git commit --amend rewrites history; ask the owner"
+            if abbreviates(argument, COMMIT_FORBIDDEN_LONG):
+                return f"git commit {argument.split('=')[0]} {partial}"
+            if abbreviates(argument, COMMIT_LONG_WITH_VALUE) and "=" not in argument:
                 next(remaining, None)
         elif argument.startswith("-") and len(argument) > 1:
             flags = argument[1:]
             for index, flag in enumerate(flags):
-                if flag == "a":
-                    return "git commit -a stages every tracked change"
+                if flag in COMMIT_FORBIDDEN_SHORT:
+                    return f"git commit -{flag} {partial}"
+                if flag in COMMIT_SHORT_WITH_ATTACHED_VALUE:
+                    break
                 if flag in COMMIT_SHORT_WITH_VALUE:
                     if index == len(flags) - 1:
                         next(remaining, None)
                     break
+        else:
+            return f"git commit with paths {partial}"
     return None
 
 
 def switch_problem(arguments: list[str]) -> str | None:
     for argument in arguments:
-        if argument in SWITCH_FORBIDDEN_LONG or (
+        if (
+            argument.startswith("--") and abbreviates(argument, SWITCH_FORBIDDEN_LONG)
+        ) or (
             argument.startswith("-")
             and not argument.startswith("--")
             and "f" in argument[1:]
@@ -213,13 +245,13 @@ def inspect(command: str) -> str | None:
 
 
 def main() -> None:
-    event = json.load(sys.stdin)
-    if event.get("tool_name") != "Bash":
-        return
-    command = event.get("tool_input", {}).get("command", "")
-    if "git" not in command:
-        return
     try:
+        event = json.load(sys.stdin)
+        if event.get("tool_name") != "Bash":
+            return
+        command = event.get("tool_input", {}).get("command", "")
+        if "git" not in command:
+            return
         problem = inspect(command)
     except Exception as error:
         problem = (
