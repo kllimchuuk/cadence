@@ -5,7 +5,7 @@ description: Checklist of the Cadence invariants (SPEC §5) with concrete things
 
 # Invariant checklist
 
-Start from `git diff main...HEAD --name-only`. Check an invariant in depth only when a changed path matches its trigger; mark the others "not touched" and name the trigger that did not fire. For each checked item answer pass or fail and point at the code or test that proves it. The source is `docs/SPEC.md` §5; tests are listed in §12.
+Start from `git diff origin/main...HEAD --name-only`. Check an invariant in depth only when a changed path matches its trigger; mark the others "not touched" and name the trigger that did not fire. For each checked item answer pass or fail and point at the code or test that proves it. The source is `docs/SPEC.md` §5; tests are listed in §12.
 
 | ID | Triggered by a change in | Look for | Red flag |
 |---|---|---|---|

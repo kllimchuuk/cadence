@@ -41,7 +41,13 @@ Tests need the database: `docker compose up -d` from the repository root (Postgr
 
 ## What enforces what
 
-Hooks in `.claude/settings.json` run without being asked: `black` formats every edited backend Python file, and the commit gate blocks a commit unless `black --check`, `flake8` and `pytest` pass. Permissions deny `git push`, `git add .`, `-A`, `-u`, `git commit -a`, `--amend`, `reset --hard` and reading `.env`. A rule that can be enforced belongs in a hook, a permission or a guard test, not only in this file.
+Hooks in `.claude/settings.json` run without being asked:
+
+- `format_python.py` runs `black` on every edited file under `backend/src`, `tests` and `migrations`.
+- `commit_gate.py` reads every `git` call in a Bash command, wherever its flags stand, and blocks: `git add` of anything but explicit paths (`.`, `:/`, globs, `-A`, `-u`, `-f`) or of `.env` and `settings.local.json`; `git commit` with `--amend` or `-a`; `git switch -f` or `--discard-changes`; and a commit while a secret is staged, while files under `backend/` or `.claude/hooks/` are changed but unstaged, or while `black --check`, `flake8` or `pytest` fails. If it cannot parse a git command, it blocks it.
+- Permissions deny `git push`, `reset --hard` and reading `.env`.
+
+A rule that can be enforced belongs in a hook, a permission or a guard test, not only in this file.
 
 ## How we work
 
@@ -66,7 +72,7 @@ Hooks in `.claude/settings.json` run without being asked: `black` formats every 
 - Stage files by explicit path; never stage `.env` or `.claude/settings.local.json`.
 - No `--amend`, `reset`, `rebase` or force options on existing history unless the owner asks.
 - Message: Conventional Commits in English, one line `type: short action`, no body unless needed. Two to four larger commits per PR, each green on its own (`pytest`, `black --check`, `flake8`). When you wrote the change, add a `Co-Authored-By` trailer naming the model that wrote it, e.g. `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-- After a series of commits show `git log --stat`.
+- After a series of commits show `git log --stat origin/main..HEAD`.
 - A PR description is the report, without a "Generated with" footer.
 
 ## Stack and dependencies

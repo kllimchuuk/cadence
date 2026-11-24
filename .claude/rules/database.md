@@ -6,6 +6,9 @@ paths:
   - "backend/src/core/registry.py"
   - "backend/src/**/models.py"
   - "backend/tests/conftest.py"
+  - "backend/tests/helpers.py"
+  - "backend/src/config.py"
+  - "backend/.env.example"
   - "docker-compose.yml"
 ---
 

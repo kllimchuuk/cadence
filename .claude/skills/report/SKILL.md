@@ -9,7 +9,7 @@ Use exactly this shape. It is used as the pull request description and, for nota
 
 ```
 REPORT <date> - <slice or branch>
-Done: what now works, in behavior terms; commits as `git log --oneline main..HEAD`.
+Done: what now works, in behavior terms; commits as `git log --oneline origin/main..HEAD`.
 Numbers: measured values only, each with the command or file it came from; "none" if nothing was measured.
 Deviations from SPEC: each deviation and why, with the DECISIONS entry; "none" if there are none.
 Decision needed: open questions, each with your recommendation; "none" if there are none.

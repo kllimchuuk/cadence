@@ -19,8 +19,8 @@ Follow these steps in order. The slice list is in `docs/SPEC.md` §10; the rules
 6. **Verify.** For a change to behavior in `backend/src`, run the `verify` skill against the running app. Report a step that could not run as not verified.
 7. **Document.** If the change deviates from SPEC or settles a choice, add the entry to `docs/DECISIONS.md` and edit the SPEC in the same commit.
 8. **Commit locally.** Stage by explicit path. Two to four larger commits, each green on its own. One-line subject, then a `Co-Authored-By` trailer naming the model that wrote the change, e.g. `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Never push, amend or reset history.
-9. **Review.** Run the `reviewer` subagent on the branch (`model: opus`) and pass it the commit SHA. Fix its findings in one `fix: address review` commit, each with a test that failed first, then run it again with the earlier findings listed. A review of an older commit does not count.
+9. **Review.** Run `git fetch origin`, then the `reviewer` subagent on the branch (`model: opus`), and pass it the commit SHA. Fix its findings in one `fix: address review` commit, each with a test that failed first, then run it again with the earlier findings listed. A review of an older commit does not count.
 10. **Learn.** If the owner's PR review catches something the reviewer missed, and the same pattern has shown up in at least two PRs, add it to "Lessons from missed findings" in `invariants-check`. Delete entries that no longer apply.
-11. **Hand over.** Show `git log --stat main..HEAD`, then report in the `report` skill's shape. The owner pushes and opens the PR.
+11. **Hand over.** Show `git log --stat origin/main..HEAD`, then report in the `report` skill's shape. The owner pushes and opens the PR.
 
 If a check or verification still fails after three rounds of fixes, stop and say what you tried instead of looping.
