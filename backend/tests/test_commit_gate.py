@@ -343,6 +343,7 @@ def test_read_commands_that_write_or_run_programs_are_blocked(
         "git diff --output-indicator-new=+",
         "git log --oneline origin/main..HEAD",
         "git show HEAD --stat",
+        "git log -- --output",
         "git fetch origin",
     ],
 )
