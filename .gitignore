@@ -13,6 +13,4 @@ env/
 .env
 .DS_Store
 run_tests.sh
-CLAUDE.md
-docs
-.claude
+.claude/settings.local.json
