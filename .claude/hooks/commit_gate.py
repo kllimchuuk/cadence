@@ -16,7 +16,15 @@ SEPARATORS = {"&&", "||", ";", ";;", "|", "|&", "&", "(", ")"}
 REDIRECTIONS = {">", ">>", ">|", "<", "<<", "<<<", ">&", "<&", "&>", "&>>", "<>"}
 WRAPPERS = {"env", "command", "time", "nohup", "{", "}", "!"}
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
-GLOBAL_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
+GLOBAL_OPTIONS_WITH_VALUE = {
+    "-C",
+    "-c",
+    "--git-dir",
+    "--work-tree",
+    "--namespace",
+    "--config-env",
+    "--attr-source",
+}
 
 SECRET_NAMES = {".env", "settings.local.json"}
 MASS_PATHSPECS = {".", "./", "..", ":", ":/"}
@@ -26,6 +34,7 @@ ADD_FORBIDDEN_LONG = {
     "--force",
     "--no-ignore-removal",
     "--pathspec-from-file",
+    "--renormalize",
 }
 ADD_FORBIDDEN_SHORT = set("Auf")
 COMMIT_FORBIDDEN_LONG = {
@@ -52,6 +61,8 @@ COMMIT_LONG_WITH_VALUE = {
     "--cleanup",
 }
 SWITCH_FORBIDDEN_LONG = {"--force", "--discard-changes"}
+READ_FORBIDDEN_LONG = {"--output"}
+FETCH_FORBIDDEN_LONG = {"--upload-pack"}
 
 
 def tokens(command: str) -> list[str]:
@@ -170,7 +181,31 @@ def switch_problem(arguments: list[str]) -> str | None:
     return None
 
 
-PROBLEMS = {"add": add_problem, "commit": commit_problem, "switch": switch_problem}
+def read_problem(arguments: list[str]) -> str | None:
+    for argument in arguments:
+        if argument == "--":
+            break
+        if argument.startswith("--") and abbreviates(argument, READ_FORBIDDEN_LONG):
+            return f"{argument.split('=')[0]} writes a file; read to stdout instead"
+    return None
+
+
+def fetch_problem(arguments: list[str]) -> str | None:
+    for argument in arguments:
+        if argument.startswith("--") and abbreviates(argument, FETCH_FORBIDDEN_LONG):
+            return f"git fetch {argument.split('=')[0]} runs a program; ask the owner"
+    return None
+
+
+PROBLEMS = {
+    "add": add_problem,
+    "commit": commit_problem,
+    "switch": switch_problem,
+    "diff": read_problem,
+    "log": read_problem,
+    "show": read_problem,
+    "fetch": fetch_problem,
+}
 
 
 def git_lines(*arguments: str) -> list[str]:

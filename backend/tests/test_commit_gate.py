@@ -58,6 +58,8 @@ def run_main(
         "env git commit -m x",
         "{ git commit -m x; }",
         "git commit -m \"$(printf 'a\\nb')\"",
+        "git --config-env core.pager=HOME commit -m x",
+        "git --attr-source HEAD commit -m x",
     ],
 )
 def test_commit_commands_are_detected(command: str) -> None:
@@ -306,12 +308,48 @@ def test_unparsable_git_command_is_blocked(
         "git commit --pathspec-from-file=list.txt -m x",
         "git switch --discard main",
         "git switch --forc main",
+        "git add --renormalize",
+        "git add --renorm backend/src/a.py",
     ],
 )
 def test_abbreviated_and_file_fed_options_are_blocked(
     hook: ModuleType, monkeypatch: pytest.MonkeyPatch, command: str
 ) -> None:
     assert run_main(hook, monkeypatch, command) == 2
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git diff --output=backend/src/main.py",
+        "git diff --output backend/src/main.py",
+        "git log -p --output=out.txt",
+        "git show --out=out.txt HEAD",
+        "git fetch --upload-pack=touch .",
+        "git fetch --upload-pack touch .",
+        "git --config-env core.pager=HOME commit --amend --no-edit",
+    ],
+)
+def test_read_commands_that_write_or_run_programs_are_blocked(
+    hook: ModuleType, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    assert run_main(hook, monkeypatch, command) == 2
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git diff --stat origin/main...HEAD",
+        "git diff --output-indicator-new=+",
+        "git log --oneline origin/main..HEAD",
+        "git show HEAD --stat",
+        "git fetch origin",
+    ],
+)
+def test_ordinary_read_commands_pass(
+    hook: ModuleType, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    assert run_main(hook, monkeypatch, command) == 0
 
 
 @pytest.mark.parametrize(
